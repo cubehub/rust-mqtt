@@ -31,13 +31,32 @@ impl AsyncClient {
 
         unsafe {
             ffimqttasync::MQTTAsync_create(&mut client,
-                                               mem::transmute::<&u8, *const c_char>(&array_url[0]),
-                                               mem::transmute::<&u8, *const c_char>(&array_clientid[0]),
-                                               persistence_type as i32,
-                                               &mut persistence_context);
-                }
+                                           mem::transmute::<&u8, *const c_char>(&array_url[0]),
+                                           mem::transmute::<&u8, *const c_char>(&array_clientid[0]),
+                                           persistence_type as i32,
+                                           &mut persistence_context);
+        }
 
         client
+    }
+
+    pub fn connect(&mut self) {
+        unsafe {
+            ffimqttasync::MQTTAsync_setCallbacks(self.client,
+                                                 ptr::null_mut(),
+                                                 &mut Some(Self::disconnected),
+                                                 &mut Some(Self::received),
+                                                 ptr::null_mut(),
+                                               );
+        }
+    }
+
+    extern "C" fn disconnected() {
+
+    }
+
+    extern "C" fn received() -> i32 {
+        42
     }
 }
 
