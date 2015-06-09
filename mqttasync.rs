@@ -71,3 +71,45 @@ impl AsyncConnectOptions {
         options
     }
 }
+
+pub struct AsyncDisconnectOptions {
+    options: ffimqttasync::MQTTAsync_disconnectOptions,
+}
+
+impl AsyncDisconnectOptions {
+
+    pub fn new() -> ffimqttasync::MQTTAsync_disconnectOptions {
+        let options = ffimqttasync::MQTTAsync_disconnectOptions {
+            struct_id: ['M' as i8, 'Q' as i8, 'T' as i8, 'D' as i8],
+            struct_version: 0,
+            timeout: 0,
+            onSuccess: ptr::null_mut(),
+            onFailure: ptr::null_mut(),
+            context: ptr::null_mut(),
+        };
+
+        options
+    }
+}
+
+pub struct AsyncMessage {
+    options: ffimqttasync::MQTTAsync_message,
+}
+
+impl AsyncMessage {
+
+    pub fn new() -> ffimqttasync::MQTTAsync_message {
+        let message = ffimqttasync::MQTTAsync_message {
+            struct_id: ['M' as i8, 'Q' as i8, 'T' as i8, 'M' as i8],
+            struct_version: 0,
+            payloadlen: 0,
+            payload: ptr::null_mut(),
+            qos: 0,
+            retained: 0,
+            dup: 0,
+            msgid: 0,
+        };
+
+        message
+    }
+}
