@@ -4,6 +4,7 @@ use mqtt::ffimqttasync;
 use std::mem;
 use libc::{c_char, c_void};
 use std::ffi::CString;
+use std::ptr;
 
 #[allow(non_camel_case_types)]
 pub enum PersistentType {
@@ -12,11 +13,11 @@ pub enum PersistentType {
     PERSISTENCE_USER = 2,
 }
 
-pub struct ClientAsync {
+pub struct AsyncClient {
     client: ffimqttasync::MQTTAsync,
 }
 
-impl ClientAsync {
+impl AsyncClient {
 
     pub fn new(url: &str, clientid: &str, persistence_type: PersistentType) -> ffimqttasync::MQTTAsync {
         let mut client: ffimqttasync::MQTTAsync = unsafe{mem::zeroed()};
@@ -37,5 +38,36 @@ impl ClientAsync {
                 }
 
         client
+    }
+}
+
+pub struct AsyncConnectOptions {
+    options: ffimqttasync::MQTTAsync_connectOptions,
+}
+
+impl AsyncConnectOptions {
+
+    pub fn new() -> ffimqttasync::MQTTAsync_connectOptions {
+        let options = ffimqttasync::MQTTAsync_connectOptions {
+            struct_id: ['M' as i8, 'Q' as i8, 'T' as i8, 'C' as i8],
+            struct_version: 3,
+            keepAliveInterval: 60,
+            cleansession: 1,
+            maxInflight: 10,
+            will: ptr::null_mut(),
+            username: ptr::null_mut(),
+            password: ptr::null_mut(),
+            connectTimeout: 30,
+            retryInterval: 0,
+            ssl: ptr::null_mut(),
+            onSuccess: ptr::null_mut(),
+            onFailure: ptr::null_mut(),
+            context: ptr::null_mut(),
+            serverURIcount: 0,
+            serverURIs: ptr::null_mut(),
+            MQTTVersion: 0,
+        };
+
+        options
     }
 }
