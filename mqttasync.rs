@@ -51,17 +51,17 @@ impl AsyncClient {
         }
     }
 
-    extern "C" fn disconnected() {
+    extern "C" fn disconnected(context: *const c_void, cause: *const c_char) {
 
     }
 
-    extern "C" fn received() -> i32 {
+    extern "C" fn received(context: *const ::libc::c_void, topic_name: *const ::libc::c_char, topic_len: ::libc::c_int, message: *const ffimqttasync::MQTTAsync_message) -> i32 {
         42
     }
 }
 
 pub struct AsyncConnectOptions {
-    options: ffimqttasync::MQTTAsync_connectOptions,
+    pub options: ffimqttasync::MQTTAsync_connectOptions,
 }
 
 impl AsyncConnectOptions {
@@ -92,7 +92,7 @@ impl AsyncConnectOptions {
 }
 
 pub struct AsyncDisconnectOptions {
-    options: ffimqttasync::MQTTAsync_disconnectOptions,
+    pub options: ffimqttasync::MQTTAsync_disconnectOptions,
 }
 
 impl AsyncDisconnectOptions {
