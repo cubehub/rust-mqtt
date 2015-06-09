@@ -302,14 +302,14 @@ extern "C" {
     pub fn MQTTAsync_setCallbacks(handle: MQTTAsync,
                                   context: *mut ::libc::c_void,
                                   cl:
-                                      *mut ::std::option::Option<extern "C" fn()
+                                      *mut ::std::option::Option<extern "C" fn(context: *const ::libc::c_void, cause: *const ::libc::c_char)
                                                                      -> ()>,
                                   ma:
-                                      *mut ::std::option::Option<extern "C" fn()
+                                      *mut ::std::option::Option<extern "C" fn(context: *const ::libc::c_void, topicName: *const ::libc::c_char, topicLen: ::libc::c_int, message: *const MQTTAsync_message)
                                                                      ->
                                                                          ::libc::c_int>,
                                   dc:
-                                      *mut ::std::option::Option<extern "C" fn()
+                                      *mut ::std::option::Option<extern "C" fn(context: *const ::libc::c_void, token: MQTTAsync_token)
                                                                      -> ()>)
      -> ::libc::c_int;
     pub fn MQTTAsync_create(handle: *mut MQTTAsync,
