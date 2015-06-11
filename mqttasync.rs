@@ -13,6 +13,7 @@ pub enum PersistenceType {
     User = 2,
 }
 
+#[derive(Debug)]
 pub enum ConnectReturnCode {
     Success = 0,
     UnacceptableProtocol = 1,
@@ -54,7 +55,7 @@ impl AsyncClient {
         client
     }
 
-    pub fn connect(&mut self, options: &mut AsyncConnectOptions) -> ConnectReturnCode {
+    pub fn connect(&mut self, options: &mut AsyncConnectOptions) -> Result<ConnectReturnCode, ConnectReturnCode> {
         unsafe {
             ffimqttasync::MQTTAsync_setCallbacks(self.client,
                                                  ptr::null_mut(),
@@ -81,13 +82,13 @@ impl AsyncClient {
         }
 
         match error {
-            0 => ConnectReturnCode::Success,
-            1 => ConnectReturnCode::UnacceptableProtocol,
-            2 => ConnectReturnCode::IdentifierRejected,
-            3 => ConnectReturnCode::ServerUnavailable,
-            4 => ConnectReturnCode::BadUsernameOrPassword,
-            5 => ConnectReturnCode::NotAuthorized,
-            _ => ConnectReturnCode::Reserved,
+            0 => Ok(ConnectReturnCode::Success),
+            1 => Err(ConnectReturnCode::UnacceptableProtocol),
+            2 => Err(ConnectReturnCode::IdentifierRejected),
+            3 => Err(ConnectReturnCode::ServerUnavailable),
+            4 => Err(ConnectReturnCode::BadUsernameOrPassword),
+            5 => Err(ConnectReturnCode::NotAuthorized),
+            _ => Err(ConnectReturnCode::Reserved),
         }
     }
 
@@ -106,7 +107,7 @@ impl AsyncClient {
 
     extern "C" fn received(context: *mut ::libc::c_void, topic_name: *mut ::libc::c_char, topic_len: ::libc::c_int, message: *mut ffimqttasync::MQTTAsync_message) -> i32 {
         println!("received");
-        
+
         42
     }
 }
