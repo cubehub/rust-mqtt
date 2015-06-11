@@ -242,8 +242,8 @@ pub struct Struct_Unnamed11 {
     pub connectTimeout: ::libc::c_int,
     pub retryInterval: ::libc::c_int,
     pub ssl: *mut MQTTAsync_SSLOptions,
-    pub onSuccess: *mut ::std::option::Option<extern "C" fn(context: *const ::libc::c_void, response: *const MQTTAsync_successData) -> ()>,
-    pub onFailure: *mut ::std::option::Option<extern "C" fn(context: *const ::libc::c_void, response: *const MQTTAsync_failureData) -> ()>,
+    pub onSuccess: ::std::option::Option<MQTTAsync_onSuccess>,
+    pub onFailure: ::std::option::Option<MQTTAsync_onFailure>,
     pub context: *mut ::libc::c_void,
     pub serverURIcount: ::libc::c_int,
     pub serverURIs: *const *mut ::libc::c_char,
@@ -301,16 +301,9 @@ pub type MQTTAsync_nameValue = Struct_Unnamed13;
 extern "C" {
     pub fn MQTTAsync_setCallbacks(handle: MQTTAsync,
                                   context: *mut ::libc::c_void,
-                                  cl:
-                                      *mut ::std::option::Option<extern "C" fn(context: *const ::libc::c_void, cause: *const ::libc::c_char)
-                                                                     -> ()>,
-                                  ma:
-                                      *mut ::std::option::Option<extern "C" fn(context: *const ::libc::c_void, topicName: *const ::libc::c_char, topicLen: ::libc::c_int, message: *const MQTTAsync_message)
-                                                                     ->
-                                                                         ::libc::c_int>,
-                                  dc:
-                                      *mut ::std::option::Option<extern "C" fn(context: *const ::libc::c_void, token: MQTTAsync_token)
-                                                                     -> ()>)
+                                  cl: ::std::option::Option<MQTTAsync_connectionLost>,
+                                  ma: ::std::option::Option<MQTTAsync_messageArrived>,
+                                  dc: ::std::option::Option<MQTTAsync_deliveryComplete>)
      -> ::libc::c_int;
     pub fn MQTTAsync_create(handle: *mut MQTTAsync,
                             serverURI: *const ::libc::c_char,
