@@ -58,9 +58,9 @@ impl AsyncClient {
         unsafe {
             ffimqttasync::MQTTAsync_setCallbacks(self.client,
                                                  ptr::null_mut(),
-                                                 &mut Some(Self::disconnected),
-                                                 &mut Some(Self::received),
-                                                 ptr::null_mut(),
+                                                 Some(Self::disconnected),
+                                                 Some(Self::received),
+                                                 None,
                                                );
         }
 
@@ -72,8 +72,8 @@ impl AsyncClient {
         options.options.retryInterval = options.retry_interval;
 
         // register callbacks
-        options.options.onSuccess = &mut Some(Self::connect_succeeded);
-        options.options.onFailure = &mut Some(Self::connect_failed);
+        options.options.onSuccess = Some(Self::connect_succeeded);
+        options.options.onFailure = Some(Self::connect_failed);
 
         let mut error = 0;
         unsafe {
@@ -91,19 +91,22 @@ impl AsyncClient {
         }
     }
 
-    extern "C" fn connect_succeeded(context: *const ::libc::c_void, response: *const ffimqttasync::MQTTAsync_successData) {
+    extern "C" fn connect_succeeded(context: *mut ::libc::c_void, response: *mut ffimqttasync::MQTTAsync_successData) -> () {
         println!("connect succeeded");
     }
 
-    extern "C" fn connect_failed(context: *const ::libc::c_void, response: *const ffimqttasync::MQTTAsync_failureData) {
+    extern "C" fn connect_failed(context: *mut ::libc::c_void, response: *mut ffimqttasync::MQTTAsync_failureData) -> () {
         println!("connect failed");
     }
 
-    extern "C" fn disconnected(context: *const c_void, cause: *const c_char) {
+    extern "C" fn disconnected(context: *mut c_void, cause: *mut c_char) -> () {
+        println!("disconnected");
 
     }
 
-    extern "C" fn received(context: *const ::libc::c_void, topic_name: *const ::libc::c_char, topic_len: ::libc::c_int, message: *const ffimqttasync::MQTTAsync_message) -> i32 {
+    extern "C" fn received(context: *mut ::libc::c_void, topic_name: *mut ::libc::c_char, topic_len: ::libc::c_int, message: *mut ffimqttasync::MQTTAsync_message) -> i32 {
+        println!("received");
+        
         42
     }
 }
@@ -133,8 +136,8 @@ impl AsyncConnectOptions {
             connectTimeout: 30,
             retryInterval: 0,
             ssl: ptr::null_mut(),
-            onSuccess: ptr::null_mut(),
-            onFailure: ptr::null_mut(),
+            onSuccess: None,
+            onFailure: None,
             context: ptr::null_mut(),
             serverURIcount: 0,
             serverURIs: ptr::null_mut(),
