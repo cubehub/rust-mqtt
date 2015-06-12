@@ -24,13 +24,19 @@ pub enum ConnectReturnCode {
     Reserved = 6,
 }
 
+#[derive(Debug)]
+pub enum CreateReturnCode {
+    Success,
+    Error(i32),
+}
+
 pub struct AsyncClient {
     client: ffimqttasync::MQTTAsync,
 }
 
 impl AsyncClient {
 
-    pub fn new(address: &str, clientid: &str, persistence: PersistenceType) -> AsyncClient {
+    pub fn new(address: &str, clientid: &str, persistence: PersistenceType) -> Result<AsyncClient, CreateReturnCode> {
         let mut fficlient: ffimqttasync::MQTTAsync = unsafe{mem::zeroed()};
         let mut persistence_context: c_void = unsafe{mem::zeroed()};
 
@@ -40,19 +46,26 @@ impl AsyncClient {
         let array_url = c_url.as_bytes_with_nul();
         let array_clientid = c_clientid.as_bytes_with_nul();
 
+        let mut error = 0;
         unsafe {
-            ffimqttasync::MQTTAsync_create(&mut fficlient,
+            error = ffimqttasync::MQTTAsync_create(&mut fficlient,
                                            mem::transmute::<&u8, *const c_char>(&array_url[0]),
                                            mem::transmute::<&u8, *const c_char>(&array_clientid[0]),
                                            persistence as i32,
                                            &mut persistence_context);
         }
 
-        let client = AsyncClient {
-            client: fficlient,
-        };
+        match error {
+            0 => {
+                let client = AsyncClient {
+                    client: fficlient,
+                };
 
-        client
+                Ok(client)
+            },
+
+            err => Err(CreateReturnCode::Error(err))
+        }
     }
 
     pub fn connect(&mut self, options: &mut AsyncConnectOptions) -> Result<ConnectReturnCode, ConnectReturnCode> {
