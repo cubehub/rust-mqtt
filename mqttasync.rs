@@ -25,9 +25,16 @@ pub enum ConnectReturnCode {
 }
 
 #[derive(Debug)]
-pub enum CreateReturnCode {
+pub enum MqttResult {
     Success,
     Error(i32),
+}
+
+#[derive(Debug)]
+pub enum Qos {
+    Q0,
+    Q1,
+    Q2,
 }
 
 pub struct AsyncClient {
@@ -36,7 +43,7 @@ pub struct AsyncClient {
 
 impl AsyncClient {
 
-    pub fn new(address: &str, clientid: &str, persistence: PersistenceType) -> Result<AsyncClient, CreateReturnCode> {
+    pub fn new(address: &str, clientid: &str, persistence: PersistenceType) -> Result<AsyncClient, MqttResult> {
         let mut fficlient: ffimqttasync::MQTTAsync = unsafe{mem::zeroed()};
         let mut persistence_context: c_void = unsafe{mem::zeroed()};
 
@@ -64,7 +71,7 @@ impl AsyncClient {
                 Ok(client)
             },
 
-            err => Err(CreateReturnCode::Error(err))
+            err => Err(MqttResult::Error(err))
         }
     }
 
@@ -113,9 +120,62 @@ impl AsyncClient {
         println!("connect failed");
     }
 
+    pub fn is_connected(&mut self) -> bool {
+        let mut ret = 0;
+        unsafe {
+            ret = ffimqttasync::MQTTAsync_isConnected(self.client);
+        }
+
+        match ret {
+            1 => true,
+            _ => false,
+        }
+    }
+
+    pub fn subscribe(&mut self, topic: &str, qos: Qos) -> Result<MqttResult, MqttResult> {
+        let mut responseoption = ffimqttasync::MQTTAsync_responseOptions {
+            struct_id: ['M' as i8, 'Q' as i8, 'T' as i8, 'R' as i8],
+            struct_version: 0,
+            onSuccess: Some(Self::subscribe_succeeded),
+            onFailure: Some(Self::subscribe_failed),
+            context: self.client,
+            token: 0,
+        };
+
+        let c_topic = CString::new(topic).unwrap();
+        let array_topic = c_topic.as_bytes_with_nul();
+
+        let c_qos: i32 = match qos {
+            Qos::Q0 => 0,
+            Qos::Q1 => 1,
+            Qos::Q2 => 2,
+        };
+
+        let mut error = 0;
+        unsafe {
+            error = ffimqttasync::MQTTAsync_subscribe(self.client,
+                                                      mem::transmute::<&u8, *const c_char>(&array_topic[0]),
+                                                      c_qos,
+                                                      &mut responseoption,
+                                                      );
+        }
+
+        match error {
+            0 => Ok(MqttResult::Success),
+            err => Err(MqttResult::Error(err)),
+        }
+    }
+
+    extern "C" fn subscribe_succeeded(context: *mut ::libc::c_void, response: *mut ffimqttasync::MQTTAsync_successData) -> () {
+        println!("subscribe succeeded");
+    }
+
+    extern "C" fn subscribe_failed(context: *mut ::libc::c_void, response: *mut ffimqttasync::MQTTAsync_failureData) -> () {
+        println!("subscribe failed");
+    }
+
     extern "C" fn disconnected(context: *mut c_void, cause: *mut c_char) -> () {
         println!("disconnected");
-
     }
 
     extern "C" fn received(context: *mut ::libc::c_void, topic_name: *mut ::libc::c_char, topic_len: ::libc::c_int, message: *mut ffimqttasync::MQTTAsync_message) -> i32 {
