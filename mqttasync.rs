@@ -32,9 +32,9 @@ pub enum MqttResult {
 
 #[derive(Debug)]
 pub enum Qos {
-    Q0,
-    Q1,
-    Q2,
+    FireAndForget,
+    AtLeastOnce,
+    OnceAndOneOnly,
 }
 
 pub struct AsyncClient {
@@ -146,9 +146,9 @@ impl AsyncClient {
         let array_topic = c_topic.as_bytes_with_nul();
 
         let c_qos: i32 = match qos {
-            Qos::Q0 => 0,
-            Qos::Q1 => 1,
-            Qos::Q2 => 2,
+            Qos::FireAndForget => 0,
+            Qos::AtLeastOnce => 1,
+            Qos::OnceAndOneOnly => 2,
         };
 
         let mut error = 0;
