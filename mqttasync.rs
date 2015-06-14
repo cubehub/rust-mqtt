@@ -4,7 +4,9 @@ use mqtt::ffimqttasync;
 use std::mem;
 use libc::{c_char, c_void};
 use std::ffi::CString;
+use std::ffi::CStr;
 use std::ptr;
+use std::slice;
 
 
 pub enum PersistenceType {
@@ -178,10 +180,27 @@ impl AsyncClient {
         println!("disconnected");
     }
 
-    extern "C" fn received(context: *mut ::libc::c_void, topic_name: *mut ::libc::c_char, topic_len: ::libc::c_int, message: *mut ffimqttasync::MQTTAsync_message) -> i32 {
-        println!("received");
+    extern "C" fn received(context: *mut ::libc::c_void, topic_name: *mut ::libc::c_char, topic_len: ::libc::c_int, amessage: *mut ffimqttasync::MQTTAsync_message) -> i32 {
+        let c_topic = unsafe {CStr::from_ptr(topic_name).to_bytes()};
+        let topic = String::from_utf8(c_topic.to_vec()).unwrap();
+        assert_eq!(topic.len(), topic_len as usize);
 
-        42
+        assert!(!amessage.is_null());
+        let transmessage: &mut ffimqttasync::MQTTAsync_message = unsafe {mem::transmute(amessage)};
+        let message: &[u8] = unsafe {
+                slice::from_raw_parts(transmessage.payload as *mut u8, transmessage.payloadlen as usize)
+        };
+
+        let strmessage = String::from_utf8(message.to_vec()).unwrap();
+        println!("received from topic: {}", topic);
+        println!("       utf8 message: {}", strmessage);
+        println!("        raw message: {:?}", message);
+
+
+        // TODO fix leaking
+        //unsafe{ffimqttasync::MQTTAsync_freeMessage(amessage as *mut *mut ffimqttasync::MQTTAsync_message)};
+        //unsafe{ffimqttasync::MQTTAsync_free(mem::transmute(topic_name))};
+        1
     }
 }
 
