@@ -132,7 +132,7 @@ impl AsyncClient {
         }
     }
 
-    pub fn subscribe(&mut self, topic: &str, qos: Qos) -> Result<MqttResult, MqttResult> {
+    pub fn subscribe(&mut self, topic: &str, qos: Qos) -> Result<(), MqttResult> {
         let mut responseoption = ffimqttasync::MQTTAsync_responseOptions {
             struct_id: ['M' as i8, 'Q' as i8, 'T' as i8, 'R' as i8],
             struct_version: 0,
@@ -161,7 +161,7 @@ impl AsyncClient {
         }
 
         match error {
-            0 => Ok(MqttResult::Success),
+            0 => Ok(()),
             err => Err(MqttResult::Error(err)),
         }
     }
