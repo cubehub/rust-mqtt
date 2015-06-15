@@ -196,10 +196,10 @@ impl AsyncClient {
         println!("       utf8 message: {}", strmessage);
         println!("        raw message: {:?}", message);
 
-
-        // TODO fix leaking
-        //unsafe{ffimqttasync::MQTTAsync_freeMessage(amessage as *mut *mut ffimqttasync::MQTTAsync_message)};
-        //unsafe{ffimqttasync::MQTTAsync_free(mem::transmute(topic_name))};
+        let mut msg = amessage;
+        unsafe{ffimqttasync::MQTTAsync_freeMessage(&mut msg)};
+        unsafe{ffimqttasync::MQTTAsync_free(mem::transmute(topic_name))};
+        
         1
     }
 }
