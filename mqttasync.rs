@@ -44,7 +44,6 @@ pub struct AsyncClient {
 }
 
 impl AsyncClient {
-
     pub fn new(address: &str, clientid: &str, persistence: PersistenceType) -> Result<AsyncClient, MqttResult> {
         let mut fficlient: ffimqttasync::MQTTAsync = unsafe{mem::zeroed()};
         let mut persistence_context: c_void = unsafe{mem::zeroed()};
@@ -199,8 +198,14 @@ impl AsyncClient {
         let mut msg = amessage;
         unsafe{ffimqttasync::MQTTAsync_freeMessage(&mut msg)};
         unsafe{ffimqttasync::MQTTAsync_free(mem::transmute(topic_name))};
-        
+
         1
+    }
+}
+
+impl Drop for AsyncClient {
+    fn drop(&mut self) {
+        unsafe{ffimqttasync::MQTTAsync_destroy(&mut self.client)};
     }
 }
 
