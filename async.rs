@@ -29,6 +29,13 @@ pub enum ConnectReturnCode {
 }
 
 #[derive(Debug)]
+pub enum ConnectErr {
+    ReturnCode(ConnectReturnCode),
+    Callback
+}
+
+
+#[derive(Debug)]
 pub enum MqttResult {
     Success,
     Error(i32),
@@ -44,9 +51,8 @@ pub enum Qos {
 
 pub struct AsyncClient {
     handle      : ffiasync::MQTTAsync,
-    // pub future  : (eventual::Complete<i32, ()>, eventual::Future<i32, ()>),
     pub random  : i32,
-    // barrier     : Barrier
+    barrier     : Barrier
 }
 impl AsyncClient {
 
@@ -69,8 +75,6 @@ impl AsyncClient {
         let array_url      = c_url.as_bytes_with_nul();
         let array_clientid = c_clientid.as_bytes_with_nul();
 
-        // let (c, f) = eventual::Future::<i32, ()>::pair();
-
         let mut error = unsafe {
             ffiasync::MQTTAsync_create(&mut handle,
                                        mem::transmute::<&u8, *const c_char>(&array_url[0]),
@@ -80,22 +84,16 @@ impl AsyncClient {
         };
 
         match error {
-            0 => {
-                let client = AsyncClient {
-                    handle : handle,
-                    // future : (c, f),
-                    random : 33,
-                    // barrier: Barrier::new(2)
-                };
-
-                Ok(client)
-            },
-
+            0   => { Ok( AsyncClient {
+                        handle    : handle,
+                        random    : 33,
+                        barrier   : Barrier::new(2)
+                    })},
             err => Err(MqttResult::Error(err))
         }
     }
 
-    pub fn connect(&mut self, options: &mut AsyncConnectOptions) -> Result<ConnectReturnCode, ConnectReturnCode> {
+    pub fn connect(&mut self, options: &mut AsyncConnectOptions) -> Result<(), ConnectErr> {
         unsafe {
             ffiasync::MQTTAsync_setCallbacks(self.handle,
                                              self.context(),
@@ -116,19 +114,26 @@ impl AsyncClient {
         options.options.onSuccess = Some(Self::connect_succeeded);
         options.options.onFailure = Some(Self::connect_failed);
 
-        let mut error = 0;
-        unsafe {
-            error = ffiasync::MQTTAsync_connect(self.handle, &options.options);
-        }
-
-        match error {
-            0 => Ok( ConnectReturnCode::Success),
-            1 => Err(ConnectReturnCode::UnacceptableProtocol),
-            2 => Err(ConnectReturnCode::IdentifierRejected),
-            3 => Err(ConnectReturnCode::ServerUnavailable),
-            4 => Err(ConnectReturnCode::BadUsernameOrPassword),
-            5 => Err(ConnectReturnCode::NotAuthorized),
-            _ => Err(ConnectReturnCode::Reserved),
+        let mut error = unsafe {
+            ffiasync::MQTTAsync_connect(self.handle, &options.options)
+        };
+        if error == 0 {
+            self.barrier.wait();
+            if self.is_connected() {
+                Ok(())
+            } else {
+                Err(ConnectErr::Callback)
+            }
+        } else {
+            Err(ConnectErr::ReturnCode(
+                match error {
+                    1 => ConnectReturnCode::UnacceptableProtocol,
+                    2 => ConnectReturnCode::IdentifierRejected,
+                    3 => ConnectReturnCode::ServerUnavailable,
+                    4 => ConnectReturnCode::BadUsernameOrPassword,
+                    5 => ConnectReturnCode::NotAuthorized,
+                    _ => ConnectReturnCode::Reserved,
+            }))
         }
     }
 
@@ -137,7 +142,7 @@ impl AsyncClient {
         assert!(!context.is_null());
 
         let selfclient: &mut AsyncClient = unsafe {mem::transmute(context)};
-
+        selfclient.barrier.wait();
         // selfclient.future.0.complete(42);
         selfclient.random = 69;
     }
@@ -145,6 +150,8 @@ impl AsyncClient {
     extern "C" fn connect_failed(context: *mut ::libc::c_void, response: *mut ffiasync::MQTTAsync_failureData) -> () {
         println!("connect failed");
         assert!(!context.is_null());
+        let selfclient: &mut AsyncClient = unsafe {mem::transmute(context)};
+        selfclient.barrier.wait();
     }
 
     extern "C" fn disconnected(context: *mut c_void, cause: *mut c_char) -> () {
@@ -153,10 +160,9 @@ impl AsyncClient {
     }
 
     pub fn is_connected(&mut self) -> bool {
-        let mut ret = 0;
-        unsafe {
-            ret = ffiasync::MQTTAsync_isConnected(self.handle);
-        }
+        let mut ret = unsafe {
+            ffiasync::MQTTAsync_isConnected(self.handle)
+        };
 
         match ret {
             1 => true,
@@ -185,7 +191,7 @@ impl AsyncClient {
             msgid           : 0,
         };
 
-        let c_topic = CString::new(topic).unwrap();
+        let c_topic     = CString::new(topic).unwrap();
         let array_topic = c_topic.as_bytes_with_nul();
 
         let mut error = unsafe {
