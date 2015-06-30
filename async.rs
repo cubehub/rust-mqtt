@@ -43,6 +43,8 @@ pub enum Qos {
 pub struct AsyncClient {
     handle: ffiasync::MQTTAsync,
     context: *mut c_void,
+    pub future: (eventual::Complete<i32, ()>, eventual::Future<i32, ()>),
+    pub random: i32,
 }
 
 impl AsyncClient {
@@ -68,6 +70,8 @@ impl AsyncClient {
         let array_url = c_url.as_bytes_with_nul();
         let array_clientid = c_clientid.as_bytes_with_nul();
 
+        let (c, f) = eventual::Future::<i32, ()>::pair();
+
         let mut error = 0;
         unsafe {
             error = ffiasync::MQTTAsync_create(&mut handle,
@@ -82,6 +86,8 @@ impl AsyncClient {
                 let client = AsyncClient {
                     handle: handle,
                     context: ptr::null_mut(),
+                    future: (c, f),
+                    random: 33,
                 };
 
                 Ok(client)
@@ -136,6 +142,9 @@ impl AsyncClient {
         assert!(!context.is_null());
 
         let selfclient: &mut AsyncClient = unsafe {mem::transmute(context)};
+
+        //selfclient.future.0.complete(42);
+        selfclient.random = 69;
     }
 
     extern "C" fn connect_failed(context: *mut ::libc::c_void, response: *mut ffiasync::MQTTAsync_failureData) -> () {
