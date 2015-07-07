@@ -51,11 +51,22 @@ pub enum ActionResult {
     Err(MqttError)
 }
 
+#[derive(Debug)]
+pub struct Message {
+    pub topic     : String,
+    pub payload   : Vec<u8>,
+    pub qos       : Qos,
+    pub retained  : bool,
+    pub duplicate : bool,
+}
+
 pub struct AsyncClient {
     handle        : ffiasync::MQTTAsync,
     barrier       : Barrier,
-    action_result : ActionResult
+    action_result : ActionResult,
+    messages      : Vec<Message>,
 }
+
 impl AsyncClient {
 
     /// Ensures the FFI struct is consistent for callback invocation.
@@ -89,7 +100,8 @@ impl AsyncClient {
             0   => { Ok( AsyncClient {
                         handle          : handle,
                         barrier         : Barrier::new(2),
-                        action_result   : ActionResult::None
+                        action_result   : ActionResult::None,
+                        messages        : Vec::new(),
                     })},
             err => Err(MqttError::Code(err))
         }
@@ -265,20 +277,66 @@ impl AsyncClient {
 
         assert!(!amessage.is_null());
         let transmessage: &mut ffiasync::MQTTAsync_message = unsafe {mem::transmute(amessage)};
-        let message: &[u8] = unsafe {
+        let payload: &[u8] = unsafe {
                 slice::from_raw_parts(transmessage.payload as *mut u8, transmessage.payloadlen as usize)
         };
 
-        let strmessage = String::from_utf8(message.to_vec()).unwrap();
-        info!("received from topic: {}", topic);
-        info!("       utf8 message: {}", strmessage);
-        info!("        raw message: {:?}", message);
+        assert!(!context.is_null());
+        let selfclient : &mut AsyncClient = unsafe {mem::transmute(context)};
+
+        let qos = match transmessage.qos {
+            0 => Qos::FireAndForget,
+            1 => Qos::AtLeastOnce,
+            2 => Qos::OnceAndOneOnly,
+            _ => unreachable!(),
+        };
+
+        let retained: bool = match transmessage.retained {
+            0 => false,
+            1 => true,
+            _ => unreachable!(),
+        };
+
+        let duplicate: bool = match transmessage.dup {
+            0 => false,
+            1 => true,
+            _ => unreachable!(),
+        };
+
+
+        let msg = Message {
+            topic     : topic,
+            payload   : payload.to_vec(),
+            qos       : qos,
+            retained  : retained,
+            duplicate : duplicate,
+        };
+
+        // TODO add mutex
+        selfclient.messages.push(msg);
 
         let mut msg = amessage;
         unsafe{ffiasync::MQTTAsync_freeMessage(&mut msg)};
         unsafe{ffiasync::MQTTAsync_free(mem::transmute(topic_name))};
-
         1
+    }
+
+    pub fn messages(&mut self) -> AsyncClientIntoIterator {
+        AsyncClientIntoIterator {
+            client: self,
+        }
+    }
+}
+
+pub struct AsyncClientIntoIterator<'a> {
+    client: &'a mut AsyncClient,
+}
+
+impl <'a>Iterator for AsyncClientIntoIterator<'a> {
+    type Item = Message;
+    fn next(&mut self) -> Option<Message> {
+        // TODO add mutex
+        self.client.messages.pop()
     }
 }
 
