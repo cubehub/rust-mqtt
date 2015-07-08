@@ -1,4 +1,4 @@
-use mqtt::ffiasync;
+use ffiasync;
 
 use libc::{c_char, c_int, c_void};
 use std::ffi::{CStr, CString};
