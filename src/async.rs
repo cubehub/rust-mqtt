@@ -87,7 +87,7 @@ impl AsyncClient {
         let array_url      = c_url.as_bytes_with_nul();
         let array_clientid = c_clientid.as_bytes_with_nul();
 
-        let mut error = unsafe {
+        let error = unsafe {
             ffiasync::MQTTAsync_create(&mut handle,
                                        mem::transmute::<&u8, *const c_char>(&array_url[0]),
                                        mem::transmute::<&u8, *const c_char>(&array_clientid[0]),
@@ -129,7 +129,7 @@ impl AsyncClient {
         options.options.onFailure = Some(Self::action_failed);
 
         self.action_result = ActionResult::None;
-        let mut error = unsafe {
+        let error = unsafe {
             ffiasync::MQTTAsync_connect(self.handle, &options.options)
         };
         if error == 0 {
@@ -152,13 +152,14 @@ impl AsyncClient {
         }
     }
 
+    #[allow(unused_variables)]
     extern "C" fn disconnected(context: *mut c_void, cause: *mut c_char) -> () {
         warn!("disconnected");
         assert!(!context.is_null());
     }
 
     pub fn is_connected(&mut self) -> bool {
-        let mut ret = unsafe {
+        let ret = unsafe {
             ffiasync::MQTTAsync_isConnected(self.handle)
         };
 
@@ -194,7 +195,7 @@ impl AsyncClient {
         let array_topic    = c_topic.as_bytes_with_nul();
         self.action_result = ActionResult::None;
 
-        let mut error = unsafe {
+        let error = unsafe {
             ffiasync::MQTTAsync_sendMessage(self.handle,
                                             mem::transmute::<&u8, *const c_char>(&array_topic[0]),
                                             &mut message,
@@ -231,7 +232,7 @@ impl AsyncClient {
         };
         self.action_result = ActionResult::None;
 
-        let mut error = unsafe {
+        let error = unsafe {
             ffiasync::MQTTAsync_subscribe(self.handle,
                                           mem::transmute::<&u8, *const c_char>(&array_topic[0]),
                                           c_qos,
@@ -248,6 +249,7 @@ impl AsyncClient {
         } else { Err(MqttError::Code(error)) }
     }
 
+    #[allow(unused_variables)]
     extern "C" fn action_succeeded(context: *mut ::libc::c_void, response: *mut ffiasync::MQTTAsync_successData) -> () {
         info!("success callback");
         assert!(!context.is_null());
@@ -395,6 +397,9 @@ impl AsyncConnectOptions {
     }
 }
 
+// it is going to be used in the future
+// just silence warning for now
+#[allow(dead_code)]
 pub struct AsyncDisconnectOptions {
     options: ffiasync::MQTTAsync_disconnectOptions,
 }
@@ -411,26 +416,5 @@ impl AsyncDisconnectOptions {
         };
 
         options
-    }
-}
-
-pub struct AsyncMessage {
-    options: ffiasync::MQTTAsync_message,
-}
-impl AsyncMessage {
-
-    pub fn new() -> ffiasync::MQTTAsync_message {
-        let message = ffiasync::MQTTAsync_message {
-            struct_id       : ['M' as i8, 'Q' as i8, 'T' as i8, 'M' as i8],
-            struct_version  : 0,
-            payloadlen      : 0,
-            payload         : ptr::null_mut(),
-            qos             : 0,
-            retained        : 0,
-            dup             : 0,
-            msgid           : 0,
-        };
-
-        message
     }
 }
