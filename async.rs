@@ -5,8 +5,7 @@ use std::ffi::{CStr, CString};
 use std::mem;
 use std::ptr;
 use std::slice;
-use std::sync::Barrier;
-
+use std::sync::{Barrier, Mutex};
 
 pub enum PersistenceType {
     Default = 0,
@@ -64,7 +63,7 @@ pub struct AsyncClient {
     handle        : ffiasync::MQTTAsync,
     barrier       : Barrier,
     action_result : ActionResult,
-    messages      : Vec<Message>,
+    messages      : Mutex<Vec<Message>>,
 }
 
 impl AsyncClient {
@@ -101,7 +100,7 @@ impl AsyncClient {
                         handle          : handle,
                         barrier         : Barrier::new(2),
                         action_result   : ActionResult::None,
-                        messages        : Vec::new(),
+                        messages        : Mutex::new(Vec::new()),
                     })},
             err => Err(MqttError::Code(err))
         }
@@ -312,8 +311,8 @@ impl AsyncClient {
             duplicate : duplicate,
         };
 
-        // TODO add mutex
-        selfclient.messages.push(msg);
+        let mut messages = selfclient.messages.lock().unwrap();
+        messages.push(msg);
 
         let mut msg = amessage;
         unsafe{ffiasync::MQTTAsync_freeMessage(&mut msg)};
@@ -335,8 +334,13 @@ pub struct AsyncClientIntoIterator<'a> {
 impl <'a>Iterator for AsyncClientIntoIterator<'a> {
     type Item = Message;
     fn next(&mut self) -> Option<Message> {
-        // TODO add mutex
-        self.client.messages.pop()
+        let mut messages = self.client.messages.lock().unwrap();
+        if messages.len() > 0 {
+            Some(messages.remove(0))
+        }
+        else {
+            None
+        }
     }
 }
 
