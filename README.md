@@ -6,7 +6,6 @@ Currently only async lib is implemented.
 
 Build [paho.mqtt.c lib](https://github.com/eclipse/paho.mqtt.c)
 
-    cd ~/Downloads
     git clone https://github.com/eclipse/paho.mqtt.c.git
     cd paho.mqtt.c
     git checkout develop
