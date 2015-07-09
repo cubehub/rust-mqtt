@@ -57,11 +57,11 @@ Start rust-mqtt [example](https://github.com/cubehub/rust-mqtt/blob/master/examp
 
 Tool called rust-bindgen is used to generate Rust functions from C files.
 
-Build [rust-bindgen](https://github.com/crabtw/rust-bindgen)
-Do this on Mac OS X:
+Mac OS X:
 
     echo export DYLD_LIBRARY_PATH=/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/:$DYLD_LIBRARY_PATH >> ~/.profile
 
+Build [rust-bindgen](https://github.com/crabtw/rust-bindgen)
 
     git clone https://github.com/crabtw/rust-bindgen.git
     cd rust-bindgen
