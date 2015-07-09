@@ -6,3 +6,7 @@ authors = ["Andres Vahter <andres.vahter@gmail.com>"]
 [dependencies]
 libc = "*"
 log = "*"
+
+# examples
+fern = "*"
+time = "*"
