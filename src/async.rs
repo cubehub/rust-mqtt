@@ -21,7 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
- 
+
 use ffiasync;
 
 use libc::{c_char, c_int, c_void};
@@ -51,13 +51,13 @@ pub enum ConnectReturnCode {
 #[derive(Debug)]
 pub enum ConnectErr {
     ReturnCode(ConnectReturnCode),
-    Callback
+    CallbackFailure(ActionResult),
 }
 
 #[derive(Debug, Copy, Clone)]
 pub enum MqttError {
     Code(i32),
-    Bad
+    Null
 }
 
 #[derive(Debug)]
@@ -131,7 +131,7 @@ impl AsyncClient {
     }
 
     pub fn connect(&mut self, options: &mut AsyncConnectOptions) -> Result<(), ConnectErr> {
-        info!("connect..");
+        debug!("connect..");
         unsafe {
             ffiasync::MQTTAsync_setCallbacks(self.handle,
                                              self.context(),
@@ -161,7 +161,7 @@ impl AsyncClient {
             if self.is_connected() {
                 Ok(())
             } else {
-                Err(ConnectErr::Callback)
+                Err(ConnectErr::CallbackFailure(self.action_result))
             }
         } else {
             Err(ConnectErr::ReturnCode(
@@ -194,7 +194,7 @@ impl AsyncClient {
     }
 
     pub fn send(&mut self, data: &[u8], topic: &str, qos: Qos) -> Result<(), MqttError> {
-        info!("send..");
+        debug!("send..");
         let mut responseoption = ffiasync::MQTTAsync_responseOptions {
             struct_id       : ['M' as i8, 'Q' as i8, 'T' as i8, 'R' as i8],
             struct_version  : 0,
@@ -236,7 +236,7 @@ impl AsyncClient {
     }
 
     pub fn subscribe(&mut self, topic: &str, qos: Qos) -> Result<(), MqttError> {
-        info!("subscribe..");
+        debug!("subscribe..");
         let mut responseoption = ffiasync::MQTTAsync_responseOptions {
             struct_id       : ['M' as i8, 'Q' as i8, 'T' as i8, 'R' as i8],
             struct_version  : 0,
@@ -275,7 +275,7 @@ impl AsyncClient {
 
     #[allow(unused_variables)]
     extern "C" fn action_succeeded(context: *mut ::libc::c_void, response: *mut ffiasync::MQTTAsync_successData) -> () {
-        info!("success callback");
+        debug!("success callback");
         assert!(!context.is_null());
         let selfclient: &mut AsyncClient = unsafe {mem::transmute(context)};
         selfclient.action_result = ActionResult::Ok;
@@ -283,11 +283,11 @@ impl AsyncClient {
     }
 
     extern "C" fn action_failed(context: *mut ::libc::c_void, response: *mut ffiasync::MQTTAsync_failureData) -> () {
-        info!("failure callback");
+        debug!("failure callback");
         assert!(!context.is_null());
         let selfclient : &mut AsyncClient = unsafe {mem::transmute(context)};
         if response.is_null() {
-            selfclient.action_result = ActionResult::Err(MqttError::Bad);
+            selfclient.action_result = ActionResult::Err(MqttError::Null);
         } else {
             let resp : &mut ffiasync::MQTTAsync_failureData = unsafe {mem::transmute(response)};
             selfclient.action_result = ActionResult::Err(MqttError::Code(resp.code));
