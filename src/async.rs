@@ -59,7 +59,7 @@ impl Qos {
 #[derive(Debug)]
 pub struct Message {
     pub topic     : String,
-    pub payload   : Vec<u8>,
+    pub payload   : Option<Vec<u8>>,
     pub qos       : Qos,
     pub retained  : bool,
     pub duplicate : bool,
@@ -350,8 +350,15 @@ impl AsyncClient {
 
         assert!(!amessage.is_null());
         let transmessage: &mut ffiasync::MQTTAsync_message = unsafe {mem::transmute(amessage)};
-        let payload: &[u8] = unsafe {
-                slice::from_raw_parts(transmessage.payload as *mut u8, transmessage.payloadlen as usize)
+
+        let payload = match transmessage.payloadlen {
+            0  => None,
+            _ => {
+                let payload_slice: &[u8] = unsafe {
+                        slice::from_raw_parts(transmessage.payload as *mut u8, transmessage.payloadlen as usize)
+                };
+                Some(payload_slice.to_vec())
+            }
         };
 
         assert!(!context.is_null());
@@ -371,10 +378,9 @@ impl AsyncClient {
             _ => unreachable!(),
         };
 
-
         let msg = Message {
             topic     : topic,
-            payload   : payload.to_vec(),
+            payload   : payload,
             qos       : qos,
             retained  : retained,
             duplicate : duplicate,
