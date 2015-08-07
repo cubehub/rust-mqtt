@@ -30,6 +30,8 @@ use std::mem;
 use std::ptr;
 use std::slice;
 use std::sync::{Barrier, Mutex};
+use std::error::Error;
+use std::fmt;
 
 pub enum PersistenceType {
     Default = 0,
@@ -69,6 +71,26 @@ pub enum MqttError {
     Connect(ConnectError),
     Subscribe(CommandError),
     Send(CommandError),
+}
+impl fmt::Display for MqttError {
+    fn fmt(&self, f:&mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match *self {
+            MqttError::Create(ref x)    => fmt::Display::fmt(&format!("MqttError::Create({:?})", x), f),
+            MqttError::Connect(ref x)   => fmt::Display::fmt(&format!("MqttError::Connect({:?})", x), f),
+            MqttError::Subscribe(ref x) => fmt::Display::fmt(&format!("MqttError::Subscribe({:?})", x), f),
+            MqttError::Send(ref x)      => fmt::Display::fmt(&format!("MqttError::Send({:?})", x), f),
+        }
+    }
+}
+impl Error for MqttError {
+    fn description(&self) -> &str {
+        match *self {
+            MqttError::Create(_)    => "Mqtt creation failed",
+            MqttError::Connect(_)   => "Mqtt connect failed",
+            MqttError::Subscribe(_) => "Mqtt subscribe failed",
+            MqttError::Send(_)      => "Mqtt send failed",
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
