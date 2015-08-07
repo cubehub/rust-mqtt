@@ -29,7 +29,7 @@ use std::ffi::{CStr, CString};
 use std::mem;
 use std::ptr;
 use std::slice;
-use std::sync::{Barrier, Mutex};
+use std::sync::{Barrier, Mutex, Arc};
 use std::error::Error;
 use std::fmt;
 
@@ -139,7 +139,7 @@ pub struct AsyncClient {
     handle        : ffiasync::MQTTAsync,
     barrier       : Barrier,
     action_result : Option<Result<(), CallbackError>>,
-    messages      : Mutex<Vec<Message>>,
+    messages      : Arc<Mutex<Vec<Message>>>,
 }
 
 impl AsyncClient {
@@ -176,7 +176,7 @@ impl AsyncClient {
                         handle          : handle,
                         barrier         : Barrier::new(2),
                         action_result   : None,
-                        messages        : Mutex::new(Vec::new()),
+                        messages        : Arc::new(Mutex::new(Vec::new())),
                     })},
             err => Err(MqttError::Create(err))
         }
@@ -397,19 +397,19 @@ impl AsyncClient {
 
     pub fn messages(&mut self) -> AsyncClientIntoIterator {
         AsyncClientIntoIterator {
-            client: self,
+            messages: self.messages.clone(),
         }
     }
 }
 
-pub struct AsyncClientIntoIterator<'a> {
-    client: &'a mut AsyncClient,
+pub struct AsyncClientIntoIterator {
+    messages: Arc<Mutex<Vec<Message>>>,
 }
 
-impl <'a>Iterator for AsyncClientIntoIterator<'a> {
+impl Iterator for AsyncClientIntoIterator {
     type Item = Message;
     fn next(&mut self) -> Option<Message> {
-        let mut messages = self.client.messages.lock().unwrap();
+        let mut messages = self.messages.lock().unwrap();
         if messages.len() > 0 {
             Some(messages.remove(0))
         }
