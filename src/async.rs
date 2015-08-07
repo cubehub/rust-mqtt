@@ -38,40 +38,20 @@ pub enum PersistenceType {
 }
 
 #[derive(Debug)]
-pub enum ConnectReturnCode {
-    Success               = 0,
-    UnacceptableProtocol  = 1,
-    IdentifierRejected    = 2,
-    ServerUnavailable     = 3,
-    BadUsernameOrPassword = 4,
-    NotAuthorized         = 5,
-    Reserved              = 6,
-}
-
-#[derive(Debug)]
-pub enum ConnectErr {
-    ReturnCode(ConnectReturnCode),
-    CallbackFailure(ActionResult),
-}
-
-#[derive(Debug, Copy, Clone)]
-pub enum MqttError {
-    Code(i32),
-    Null
-}
-
-#[derive(Debug)]
 pub enum Qos {
     FireAndForget  = 0,
     AtLeastOnce    = 1,
     OnceAndOneOnly = 2,
 }
-
-#[derive(Debug, Copy, Clone)]
-pub enum ActionResult {
-    None,
-    Ok,
-    Err(MqttError)
+impl Qos {
+    fn from_int(i:i32) -> Self {
+        match i {
+            0 => Qos::FireAndForget,
+            1 => Qos::AtLeastOnce,
+            2 => Qos::OnceAndOneOnly,
+            _ => unreachable!(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -83,10 +63,60 @@ pub struct Message {
     pub duplicate : bool,
 }
 
+#[derive(Debug, Clone)]
+pub enum MqttError {
+    Create(i32),
+    Connect(ConnectError),
+    Subscribe(CommandError),
+    Send(CommandError),
+}
+
+#[derive(Debug, Clone)]
+pub enum CommandError {
+    ReturnCode(i32),
+    CallbackResponse(i32),
+    CallbackNullPtr
+}
+
+#[derive(Debug, Clone)]
+pub enum ConnectError {
+    ReturnCode(ConnectErrReturnCode),
+    CallbackResponse(i32),
+    CallbackNullPtr
+}
+
+#[derive(Debug, Clone)]
+pub enum ConnectErrReturnCode {
+    UnacceptableProtocol  = 1,
+    IdentifierRejected    = 2,
+    ServerUnavailable     = 3,
+    BadUsernameOrPassword = 4,
+    NotAuthorized         = 5,
+    Reserved              = 6,
+}
+impl ConnectErrReturnCode {
+    fn from_int(i:i32) -> Self {
+        match i {
+            1 => ConnectErrReturnCode::UnacceptableProtocol,
+            2 => ConnectErrReturnCode::IdentifierRejected,
+            3 => ConnectErrReturnCode::ServerUnavailable,
+            4 => ConnectErrReturnCode::BadUsernameOrPassword,
+            5 => ConnectErrReturnCode::NotAuthorized,
+            6 => ConnectErrReturnCode::Reserved,
+            _ => unreachable!()
+        }
+    }
+}
+
+enum CallbackError {
+    Response(i32),
+    NullPtr
+}
+
 pub struct AsyncClient {
     handle        : ffiasync::MQTTAsync,
     barrier       : Barrier,
-    action_result : ActionResult,
+    action_result : Option<Result<(), CallbackError>>,
     messages      : Mutex<Vec<Message>>,
 }
 
@@ -123,14 +153,14 @@ impl AsyncClient {
             0   => { Ok( AsyncClient {
                         handle          : handle,
                         barrier         : Barrier::new(2),
-                        action_result   : ActionResult::None,
+                        action_result   : None,
                         messages        : Mutex::new(Vec::new()),
                     })},
-            err => Err(MqttError::Code(err))
+            err => Err(MqttError::Create(err))
         }
     }
 
-    pub fn connect(&mut self, options: &mut AsyncConnectOptions) -> Result<(), ConnectErr> {
+    pub fn connect(&mut self, options: &mut AsyncConnectOptions) -> Result<(), MqttError> {
         debug!("connect..");
         unsafe {
             ffiasync::MQTTAsync_setCallbacks(self.handle,
@@ -152,28 +182,20 @@ impl AsyncClient {
         options.options.onSuccess = Some(Self::action_succeeded);
         options.options.onFailure = Some(Self::action_failed);
 
-        self.action_result = ActionResult::None;
+        self.action_result = None;
         let error = unsafe {
             ffiasync::MQTTAsync_connect(self.handle, &options.options)
         };
         if error == 0 {
             self.barrier.wait();
-            if self.is_connected() {
-                Ok(())
-            } else {
-                Err(ConnectErr::CallbackFailure(self.action_result))
+            match (self.is_connected(), &self.action_result) {
+                (true,  _                                     ) => Ok(()),
+                (false, &None                                 ) => unreachable!(),  // barrier should ensure we have something
+                (false, &Some(Ok(()))                         ) => unreachable!(),  // callback and is_connected() don't agree?
+                (false, &Some(Err(CallbackError::Response(r)))) => Err(MqttError::Connect(ConnectError::CallbackResponse(r))),
+                (false, &Some(Err(CallbackError::NullPtr))    ) => Err(MqttError::Connect(ConnectError::CallbackNullPtr)),
             }
-        } else {
-            Err(ConnectErr::ReturnCode(
-                match error {
-                    1 => ConnectReturnCode::UnacceptableProtocol,
-                    2 => ConnectReturnCode::IdentifierRejected,
-                    3 => ConnectReturnCode::ServerUnavailable,
-                    4 => ConnectReturnCode::BadUsernameOrPassword,
-                    5 => ConnectReturnCode::NotAuthorized,
-                    _ => ConnectReturnCode::Reserved,
-            }))
-        }
+        } else { Err(MqttError::Connect(ConnectError::ReturnCode(ConnectErrReturnCode::from_int(error)))) }
     }
 
     #[allow(unused_variables)]
@@ -217,7 +239,7 @@ impl AsyncClient {
 
         let c_topic        = CString::new(topic).unwrap();
         let array_topic    = c_topic.as_bytes_with_nul();
-        self.action_result = ActionResult::None;
+        self.action_result = None;
 
         let error = unsafe {
             ffiasync::MQTTAsync_sendMessage(self.handle,
@@ -227,12 +249,14 @@ impl AsyncClient {
         };
         if error == 0 {
             self.barrier.wait();
-            match self.action_result {
-                ActionResult::None   => unreachable!(),
-                ActionResult::Ok     => Ok(()),
-                ActionResult::Err(x) => Err(x)
+            match (self.is_connected(), &self.action_result) {
+                (true,  _                                     ) => Ok(()),
+                (false, &None                                 ) => unreachable!(),  // barrier should ensure we have something
+                (false, &Some(Ok(()))                         ) => unreachable!(),  // callback and is_connected() don't agree?
+                (false, &Some(Err(CallbackError::Response(r)))) => Err(MqttError::Send(CommandError::CallbackResponse(r))),
+                (false, &Some(Err(CallbackError::NullPtr))    ) => Err(MqttError::Send(CommandError::CallbackNullPtr)),
             }
-        } else { Err(MqttError::Code(error)) }
+        } else { Err(MqttError::Send(CommandError::ReturnCode(error))) }
     }
 
     pub fn subscribe(&mut self, topic: &str, qos: Qos) -> Result<(), MqttError> {
@@ -254,7 +278,7 @@ impl AsyncClient {
             Qos::AtLeastOnce    => 1,
             Qos::OnceAndOneOnly => 2,
         };
-        self.action_result = ActionResult::None;
+        self.action_result = None;
 
         let error = unsafe {
             ffiasync::MQTTAsync_subscribe(self.handle,
@@ -265,12 +289,14 @@ impl AsyncClient {
 
         if error == 0 {
             self.barrier.wait();
-            match self.action_result {
-                ActionResult::None   => unreachable!(),
-                ActionResult::Ok     => Ok(()),
-                ActionResult::Err(x) => Err(x)
+            match (self.is_connected(), &self.action_result) {
+                (true,  _                                     ) => Ok(()),
+                (false, &None                                 ) => unreachable!(),  // barrier should ensure we have something
+                (false, &Some(Ok(()))                         ) => unreachable!(),  // callback and is_connected() don't agree?
+                (false, &Some(Err(CallbackError::Response(r)))) => Err(MqttError::Subscribe(CommandError::CallbackResponse(r))),
+                (false, &Some(Err(CallbackError::NullPtr))    ) => Err(MqttError::Subscribe(CommandError::CallbackNullPtr)),
             }
-        } else { Err(MqttError::Code(error)) }
+        } else { Err(MqttError::Subscribe(CommandError::ReturnCode(error))) }
     }
 
     #[allow(unused_variables)]
@@ -278,7 +304,7 @@ impl AsyncClient {
         debug!("success callback");
         assert!(!context.is_null());
         let selfclient: &mut AsyncClient = unsafe {mem::transmute(context)};
-        selfclient.action_result = ActionResult::Ok;
+        selfclient.action_result = Some(Ok(()));
         selfclient.barrier.wait();
     }
 
@@ -287,10 +313,10 @@ impl AsyncClient {
         assert!(!context.is_null());
         let selfclient : &mut AsyncClient = unsafe {mem::transmute(context)};
         if response.is_null() {
-            selfclient.action_result = ActionResult::Err(MqttError::Null);
+            selfclient.action_result = Some(Err(CallbackError::NullPtr));
         } else {
             let resp : &mut ffiasync::MQTTAsync_failureData = unsafe {mem::transmute(response)};
-            selfclient.action_result = ActionResult::Err(MqttError::Code(resp.code));
+            selfclient.action_result = Some(Err(CallbackError::Response(resp.code)));
         }
         selfclient.barrier.wait();
     }
@@ -309,12 +335,7 @@ impl AsyncClient {
         assert!(!context.is_null());
         let selfclient : &mut AsyncClient = unsafe {mem::transmute(context)};
 
-        let qos = match transmessage.qos {
-            0 => Qos::FireAndForget,
-            1 => Qos::AtLeastOnce,
-            2 => Qos::OnceAndOneOnly,
-            _ => unreachable!(),
-        };
+        let qos = Qos::from_int(transmessage.qos);
 
         let retained: bool = match transmessage.retained {
             0 => false,
