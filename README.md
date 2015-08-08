@@ -25,7 +25,7 @@ Put this in your `Cargo.toml`:
 
 ```toml
 [dependencies.mqtt]
-git = "https://git@github.com:cubehub/rust-mqtt.git"
+git = "https://github.com/cubehub/rust-mqtt.git"
 ```
 
 And this in your crate root:
