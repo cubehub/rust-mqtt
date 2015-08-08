@@ -82,7 +82,7 @@ impl AsyncClient {
         }
     }
 
-    pub fn connect(&mut self, options: &mut AsyncConnectOptions) -> Result<(), MqttError> {
+    pub fn connect(&mut self, options: &AsyncConnectOptions) -> Result<(), MqttError> {
         debug!("connect..");
         unsafe {
             ffiasync::MQTTAsync_setCallbacks(self.handle,
