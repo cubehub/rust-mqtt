@@ -23,117 +23,17 @@
  */
 
 use ffiasync;
-
 use libc::{c_char, c_int, c_void};
 use std::ffi::{CStr, CString};
 use std::mem;
-use std::ptr;
 use std::slice;
 use std::sync::{Barrier, Mutex, Arc};
-use std::error::Error;
-use std::fmt;
 
-pub enum PersistenceType {
-    Default = 0,
-    Nothing = 1,
-    User    = 2,
-}
+use super::Message;
+use super::options::{PersistenceType, Qos, AsyncConnectOptions};
+use super::error::{MqttError, CommandError, ConnectError, ConnectErrReturnCode, CallbackError};
+use super::iterator::AsyncClientIntoIterator;
 
-#[derive(Debug)]
-pub enum Qos {
-    FireAndForget  = 0,
-    AtLeastOnce    = 1,
-    OnceAndOneOnly = 2,
-}
-impl Qos {
-    fn from_int(i:i32) -> Self {
-        match i {
-            0 => Qos::FireAndForget,
-            1 => Qos::AtLeastOnce,
-            2 => Qos::OnceAndOneOnly,
-            _ => unreachable!(),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct Message {
-    pub topic     : String,
-    pub payload   : Option<Vec<u8>>,
-    pub qos       : Qos,
-    pub retained  : bool,
-    pub duplicate : bool,
-}
-
-#[derive(Debug, Clone)]
-pub enum MqttError {
-    Create(i32),
-    Connect(ConnectError),
-    Subscribe(CommandError),
-    Send(CommandError),
-}
-impl fmt::Display for MqttError {
-    fn fmt(&self, f:&mut fmt::Formatter) -> Result<(), fmt::Error> {
-        match *self {
-            MqttError::Create(ref x)    => fmt::Display::fmt(&format!("MqttError::Create({:?})", x), f),
-            MqttError::Connect(ref x)   => fmt::Display::fmt(&format!("MqttError::Connect({:?})", x), f),
-            MqttError::Subscribe(ref x) => fmt::Display::fmt(&format!("MqttError::Subscribe({:?})", x), f),
-            MqttError::Send(ref x)      => fmt::Display::fmt(&format!("MqttError::Send({:?})", x), f),
-        }
-    }
-}
-impl Error for MqttError {
-    fn description(&self) -> &str {
-        match *self {
-            MqttError::Create(_)    => "Mqtt creation failed",
-            MqttError::Connect(_)   => "Mqtt connect failed",
-            MqttError::Subscribe(_) => "Mqtt subscribe failed",
-            MqttError::Send(_)      => "Mqtt send failed",
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum CommandError {
-    ReturnCode(i32),
-    CallbackResponse(i32),
-    CallbackNullPtr
-}
-
-#[derive(Debug, Clone)]
-pub enum ConnectError {
-    ReturnCode(ConnectErrReturnCode),
-    CallbackResponse(i32),
-    CallbackNullPtr
-}
-
-#[derive(Debug, Clone)]
-pub enum ConnectErrReturnCode {
-    UnacceptableProtocol  = 1,
-    IdentifierRejected    = 2,
-    ServerUnavailable     = 3,
-    BadUsernameOrPassword = 4,
-    NotAuthorized         = 5,
-    Reserved              = 6,
-}
-impl ConnectErrReturnCode {
-    fn from_int(i:i32) -> Self {
-        match i {
-            1 => ConnectErrReturnCode::UnacceptableProtocol,
-            2 => ConnectErrReturnCode::IdentifierRejected,
-            3 => ConnectErrReturnCode::ServerUnavailable,
-            4 => ConnectErrReturnCode::BadUsernameOrPassword,
-            5 => ConnectErrReturnCode::NotAuthorized,
-            6 => ConnectErrReturnCode::Reserved,
-            _ => unreachable!()
-        }
-    }
-}
-
-enum CallbackError {
-    Response(i32),
-    NullPtr
-}
 
 pub struct AsyncClient {
     handle        : ffiasync::MQTTAsync,
@@ -192,21 +92,23 @@ impl AsyncClient {
                                              None);
         }
 
+        let mut async_opts = ffiasync::MQTTAsync_connectOptions::new();
+
         // fill in FFI private struct
-        options.options.keepAliveInterval = options.keep_alive_interval;
-        options.options.cleansession      = options.cleansession;
-        options.options.maxInflight       = options.max_in_flight;
-        options.options.connectTimeout    = options.connect_timeout;
-        options.options.retryInterval     = options.retry_interval;
+        async_opts.keepAliveInterval = options.keep_alive_interval;
+        async_opts.cleansession      = options.cleansession;
+        async_opts.maxInflight       = options.max_in_flight;
+        async_opts.connectTimeout    = options.connect_timeout;
+        async_opts.retryInterval     = options.retry_interval;
 
         // register callbacks
-        options.options.context   = self.context();
-        options.options.onSuccess = Some(Self::action_succeeded);
-        options.options.onFailure = Some(Self::action_failed);
+        async_opts.context   = self.context();
+        async_opts.onSuccess = Some(Self::action_succeeded);
+        async_opts.onFailure = Some(Self::action_failed);
 
         self.action_result = None;
         let error = unsafe {
-            ffiasync::MQTTAsync_connect(self.handle, &options.options)
+            ffiasync::MQTTAsync_connect(self.handle, &async_opts)
         };
         if error == 0 {
             self.barrier.wait();
@@ -396,98 +298,12 @@ impl AsyncClient {
     }
 
     pub fn messages(&mut self) -> AsyncClientIntoIterator {
-        AsyncClientIntoIterator {
-            messages: self.messages.clone(),
-        }
-    }
-}
-
-pub struct AsyncClientIntoIterator {
-    messages: Arc<Mutex<Vec<Message>>>,
-}
-
-impl Iterator for AsyncClientIntoIterator {
-    type Item = Message;
-    fn next(&mut self) -> Option<Message> {
-        let mut messages = self.messages.lock().unwrap();
-        if messages.len() > 0 {
-            Some(messages.remove(0))
-        }
-        else {
-            None
-        }
+        AsyncClientIntoIterator::new(self.messages.clone())
     }
 }
 
 impl Drop for AsyncClient {
     fn drop(&mut self) {
         unsafe{ffiasync::MQTTAsync_destroy(&mut self.handle)};
-    }
-}
-
-pub struct AsyncConnectOptions {
-    options: ffiasync::MQTTAsync_connectOptions,
-
-    pub keep_alive_interval : i32,
-    pub cleansession        : i32,
-    pub max_in_flight       : i32,
-    pub connect_timeout     : i32,
-    pub retry_interval      : i32,
-}
-impl AsyncConnectOptions {
-    pub fn new() -> AsyncConnectOptions {
-        let ffioptions = ffiasync::MQTTAsync_connectOptions {
-            struct_id           : ['M' as i8, 'Q' as i8, 'T' as i8, 'C' as i8],
-            struct_version      : 3,
-            keepAliveInterval   : 60,
-            cleansession        : 1,
-            maxInflight         : 10,
-            will                : ptr::null_mut(),
-            username            : ptr::null_mut(),
-            password            : ptr::null_mut(),
-            connectTimeout      : 30,
-            retryInterval       : 0,
-            ssl                 : ptr::null_mut(),
-            onSuccess           : None,
-            onFailure           : None,
-            context             : ptr::null_mut(),
-            serverURIcount      : 0,
-            serverURIs          : ptr::null_mut(),
-            MQTTVersion         : 0,
-        };
-
-        let options = AsyncConnectOptions {
-            options             : ffioptions,
-
-            keep_alive_interval : 20,
-            cleansession        : 1,
-            max_in_flight       : 10,
-            connect_timeout     : 30,
-            retry_interval      : 0,
-        };
-
-        options
-    }
-}
-
-// it is going to be used in the future
-// just silence warning for now
-#[allow(dead_code)]
-pub struct AsyncDisconnectOptions {
-    options: ffiasync::MQTTAsync_disconnectOptions,
-}
-impl AsyncDisconnectOptions {
-
-    pub fn new() -> ffiasync::MQTTAsync_disconnectOptions {
-        let options = ffiasync::MQTTAsync_disconnectOptions {
-            struct_id       : ['M' as i8, 'Q' as i8, 'T' as i8, 'D' as i8],
-            struct_version  : 0,
-            timeout         : 0,
-            onSuccess       : ptr::null_mut(),
-            onFailure       : ptr::null_mut(),
-            context         : ptr::null_mut(),
-        };
-
-        options
     }
 }
