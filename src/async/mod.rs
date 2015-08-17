@@ -22,13 +22,22 @@
  * SOFTWARE.
  */
 
-#[macro_use]
-extern crate log;
+mod client;
+mod error;
+mod iterator;
+mod options;
 
-extern crate libc;
+pub use self::options::{PersistenceType, Qos, AsyncConnectOptions};
+pub use self::error::{MqttError, CommandError, ConnectError, ConnectErrReturnCode};
+pub use self::iterator::AsyncClientIntoIterator;
+pub use self::client::AsyncClient;
 
-#[allow(non_camel_case_types)]
-#[allow(non_snake_case)]
-#[allow(dead_code)]
-mod ffiasync;
-pub mod async;
+
+#[derive(Debug)]
+pub struct Message {
+    pub topic     : String,
+    pub payload   : Option<Vec<u8>>,
+    pub qos       : Qos,
+    pub retained  : bool,
+    pub duplicate : bool,
+}

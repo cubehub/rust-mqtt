@@ -22,13 +22,30 @@
  * SOFTWARE.
  */
 
-#[macro_use]
-extern crate log;
+use std::sync::{Mutex, Arc};
+use super::Message;
 
-extern crate libc;
 
-#[allow(non_camel_case_types)]
-#[allow(non_snake_case)]
-#[allow(dead_code)]
-mod ffiasync;
-pub mod async;
+pub struct AsyncClientIntoIterator {
+    messages: Arc<Mutex<Vec<Message>>>,
+}
+
+impl AsyncClientIntoIterator {
+    pub fn new(messages: Arc<Mutex<Vec<Message>>>) -> Self {
+        AsyncClientIntoIterator{ messages: messages }
+    }
+}
+
+impl Iterator for AsyncClientIntoIterator {
+    type Item = Message;
+
+    fn next(&mut self) -> Option<Message> {
+        let mut messages = self.messages.lock().unwrap();
+        if messages.len() > 0 {
+            Some(messages.remove(0))
+        }
+        else {
+            None
+        }
+    }
+}
