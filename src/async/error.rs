@@ -91,6 +91,7 @@ impl ConnectErrReturnCode {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
 pub enum CallbackError {
     Response(i32),
     NullPtr

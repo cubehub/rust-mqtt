@@ -36,48 +36,77 @@ use super::iterator::AsyncClientIntoIterator;
 
 
 pub struct AsyncClient {
-    handle        : ffiasync::MQTTAsync,
-    barrier       : Barrier,
-    action_result : Option<Result<(), CallbackError>>,
-    messages      : Arc<Mutex<Vec<Message>>>,
+    inner: Box<ImmovableClient>
 }
 
 impl AsyncClient {
+    pub fn new(address: &str, clientid: &str, persistence: PersistenceType) -> Result<Self, MqttError> {
+        let mut ac = AsyncClient {
+            inner: Box::new(ImmovableClient::new(address, clientid, persistence))
+        };
+        try!(ac.inner.create());
+        Ok(ac)
+    }
+    pub fn connect(&mut self, options: &AsyncConnectOptions) -> Result<(), MqttError> {
+        self.inner.connect(options)
+    }
+    pub fn is_connected(&self) -> bool {
+        self.inner.is_connected()
+    }
+    pub fn send(&mut self, data: &[u8], topic: &str, qos: Qos) -> Result<(), MqttError> {
+        self.inner.send(data, topic, qos)
+    }
+    pub fn subscribe(&mut self, topic: &str, qos: Qos) -> Result<(), MqttError> {
+        self.inner.subscribe(topic, qos)
+    }
+    pub fn messages(&mut self) -> AsyncClientIntoIterator {
+        AsyncClientIntoIterator::new(self.inner.messages.clone())
+    }
+}
 
-    /// Ensures the FFI struct is consistent for callback invocation.
-    ///
-    /// Because the user may move this struct, the `context` pointer
-    /// passed back to FFI callbacks might be invalidated. This function
-    /// should be called before FFI actions that might fire callbacks to ensure
-    /// the self-pointer is valid.
+
+struct ImmovableClient {
+    c_url               : CString,
+    c_clientid          : CString,
+    handle              : ffiasync::MQTTAsync,
+    persistence_context : c_void,
+    persistence         : PersistenceType,
+
+    barrier       : Barrier,
+    action_result : Option<Result<(), CallbackError>>,
+    pub messages  : Arc<Mutex<Vec<Message>>>,
+}
+impl ImmovableClient {
     fn context(&mut self) -> *mut c_void {
         self as *mut _ as *mut c_void
     }
 
-    pub fn new(address: &str, clientid: &str, persistence: PersistenceType) -> Result<AsyncClient, MqttError> {
-        let mut handle                      = unsafe{mem::zeroed()};
-        let mut persistence_context: c_void = unsafe{mem::zeroed()};
+    pub fn new(address: &str, clientid: &str, persistence: PersistenceType) -> Self {
+        ImmovableClient {
+                    c_url               : CString::new(address).unwrap(),
+                    c_clientid          : CString::new(clientid).unwrap(),
+                    handle              : unsafe{mem::zeroed()},
+                    persistence_context : unsafe{mem::zeroed()},
+                    persistence         : persistence,
 
-        let c_url          = CString::new(address).unwrap();
-        let c_clientid     = CString::new(clientid).unwrap();
-        let array_url      = c_url.as_bytes_with_nul();
-        let array_clientid = c_clientid.as_bytes_with_nul();
+                    barrier         : Barrier::new(2),
+                    action_result   : None,
+                    messages        : Arc::new(Mutex::new(Vec::new())),
+        }
+    }
 
+    pub fn create(&mut self) -> Result<(), MqttError> {
+        let array_url      = self.c_url.as_bytes_with_nul();
+        let array_clientid = self.c_clientid.as_bytes_with_nul();
         let error = unsafe {
-            ffiasync::MQTTAsync_create(&mut handle,
+            ffiasync::MQTTAsync_create(&mut self.handle,
                                        mem::transmute::<&u8, *const c_char>(&array_url[0]),
                                        mem::transmute::<&u8, *const c_char>(&array_clientid[0]),
-                                       persistence as i32,
-                                       &mut persistence_context)
+                                       self.persistence as i32,
+                                       &mut self.persistence_context)
         };
-
         match error {
-            0   => { Ok( AsyncClient {
-                        handle          : handle,
-                        barrier         : Barrier::new(2),
-                        action_result   : None,
-                        messages        : Arc::new(Mutex::new(Vec::new())),
-                    })},
+            0   => { Ok(())},
             err => Err(MqttError::Create(err))
         }
     }
@@ -128,7 +157,7 @@ impl AsyncClient {
         assert!(!context.is_null());
     }
 
-    pub fn is_connected(&mut self) -> bool {
+    pub fn is_connected(&self) -> bool {
         let ret = unsafe {
             ffiasync::MQTTAsync_isConnected(self.handle)
         };
@@ -227,7 +256,7 @@ impl AsyncClient {
     extern "C" fn action_succeeded(context: *mut ::libc::c_void, response: *mut ffiasync::MQTTAsync_successData) -> () {
         debug!("success callback");
         assert!(!context.is_null());
-        let selfclient: &mut AsyncClient = unsafe {mem::transmute(context)};
+        let selfclient: &mut ImmovableClient = unsafe {mem::transmute(context)};
         selfclient.action_result = Some(Ok(()));
         selfclient.barrier.wait();
     }
@@ -235,7 +264,7 @@ impl AsyncClient {
     extern "C" fn action_failed(context: *mut ::libc::c_void, response: *mut ffiasync::MQTTAsync_failureData) -> () {
         debug!("failure callback");
         assert!(!context.is_null());
-        let selfclient : &mut AsyncClient = unsafe {mem::transmute(context)};
+        let selfclient : &mut ImmovableClient = unsafe {mem::transmute(context)};
         if response.is_null() {
             selfclient.action_result = Some(Err(CallbackError::NullPtr));
         } else {
@@ -264,7 +293,7 @@ impl AsyncClient {
         };
 
         assert!(!context.is_null());
-        let selfclient : &mut AsyncClient = unsafe {mem::transmute(context)};
+        let selfclient : &mut ImmovableClient = unsafe {mem::transmute(context)};
 
         let qos = Qos::from_int(transmessage.qos);
 
@@ -297,12 +326,8 @@ impl AsyncClient {
         1
     }
 
-    pub fn messages(&mut self) -> AsyncClientIntoIterator {
-        AsyncClientIntoIterator::new(self.messages.clone())
-    }
 }
-
-impl Drop for AsyncClient {
+impl Drop for ImmovableClient {
     fn drop(&mut self) {
         unsafe{ffiasync::MQTTAsync_destroy(&mut self.handle)};
     }

@@ -25,7 +25,7 @@
 use ffiasync;
 use std::ptr;
 
-
+#[derive(Debug, Copy, Clone)]
 pub enum PersistenceType {
     Default = 0,
     Nothing = 1,
