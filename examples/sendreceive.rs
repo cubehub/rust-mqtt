@@ -7,6 +7,7 @@ extern crate mqtt;
 use std::thread;
 use std::char;
 use mqtt::async::{PersistenceType, Qos, MqttError, AsyncClient, AsyncConnectOptions};
+use std::error::Error;
 
 
 fn conf_logger() {
@@ -52,7 +53,7 @@ fn main() {
                 }
                 thread::sleep_ms(200);
             }},
-        Err(e) => error!("{}", e)
+        Err(e) => error!("{}; raw error: {}", e.description(), e)
     }
     info!("sendreceive test ended");
 }
