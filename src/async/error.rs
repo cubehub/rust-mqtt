@@ -30,6 +30,7 @@ use std::error::Error;
 pub enum MqttError {
     Create(i32),
     Connect(ConnectError),
+    Disconnect(DisconnectError),
     Subscribe(CommandError),
     Send(CommandError),
 }
@@ -38,6 +39,7 @@ impl fmt::Display for MqttError {
         match *self {
             MqttError::Create(ref x)    => fmt::Display::fmt(&format!("MqttError::Create({:?})", x), f),
             MqttError::Connect(ref x)   => fmt::Display::fmt(&format!("MqttError::Connect({:?})", x), f),
+            MqttError::Disconnect(ref x)   => fmt::Display::fmt(&format!("MqttError::Disconnect({:?})", x), f),
             MqttError::Subscribe(ref x) => fmt::Display::fmt(&format!("MqttError::Subscribe({:?})", x), f),
             MqttError::Send(ref x)      => fmt::Display::fmt(&format!("MqttError::Send({:?})", x), f),
         }
@@ -48,6 +50,7 @@ impl Error for MqttError {
         match *self {
             MqttError::Create(_)    => "Mqtt creation failed",
             MqttError::Connect(_)   => "Mqtt connect failed",
+            MqttError::Disconnect(_)   => "Mqtt disconnect failed",
             MqttError::Subscribe(_) => "Mqtt subscribe failed",
             MqttError::Send(_)      => "Mqtt send failed",
         }
@@ -86,6 +89,27 @@ impl ConnectErrReturnCode {
             4 => ConnectErrReturnCode::BadUsernameOrPassword,
             5 => ConnectErrReturnCode::NotAuthorized,
             6 => ConnectErrReturnCode::Reserved,
+            _ => unreachable!()
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum DisconnectError {
+    ReturnCode(DisconnectErrReturnCode),
+    CallbackResponse(i32),
+    CallbackNullPtr
+}
+#[derive(Debug, Clone)]
+pub enum DisconnectErrReturnCode {
+    GeneralFailure        = -1,
+    Disconnected          = -3,
+}
+impl DisconnectErrReturnCode {
+    pub fn from_int(i:i32) -> Self {
+        match i {
+            -1 => DisconnectErrReturnCode::GeneralFailure,
+            -3 => DisconnectErrReturnCode::Disconnected,
             _ => unreachable!()
         }
     }

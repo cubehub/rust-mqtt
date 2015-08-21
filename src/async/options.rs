@@ -81,7 +81,7 @@ pub struct AsyncConnectOptions {
     pub retry_interval      : i32,
 }
 impl AsyncConnectOptions {
-    pub fn new() -> AsyncConnectOptions {
+    pub fn new() -> Self {
         AsyncConnectOptions {
             keep_alive_interval : 20,
             cleansession        : 1,
@@ -92,27 +92,26 @@ impl AsyncConnectOptions {
     }
 }
 
-// it is going to be used in the future
-// just silence warning for now
-#[allow(dead_code)]
 impl ffiasync::MQTTAsync_disconnectOptions {
     pub fn new() -> Self {
         ffiasync::MQTTAsync_disconnectOptions {
             struct_id       : ['M' as i8, 'Q' as i8, 'T' as i8, 'D' as i8],
             struct_version  : 0,
             timeout         : 0,
-            onSuccess       : ptr::null_mut(),
-            onFailure       : ptr::null_mut(),
+            onSuccess       : None,
+            onFailure       : None,
             context         : ptr::null_mut(),
         }
     }
 }
 
-#[allow(dead_code)]
-pub struct AsyncDisconnectOptions;
+pub struct AsyncDisconnectOptions {
+    pub timeout             : i32,
+}
 impl AsyncDisconnectOptions {
-    #[allow(dead_code)]
     pub fn new() -> Self {
-        unimplemented!()
+        AsyncDisconnectOptions {
+            timeout        : 30
+        }
     }
 }

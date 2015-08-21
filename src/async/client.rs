@@ -30,8 +30,8 @@ use std::slice;
 use std::sync::{Barrier, Mutex, Arc};
 
 use super::Message;
-use super::options::{PersistenceType, Qos, AsyncConnectOptions};
-use super::error::{MqttError, CommandError, ConnectError, ConnectErrReturnCode, CallbackError};
+use super::options::{PersistenceType, Qos, AsyncConnectOptions, AsyncDisconnectOptions};
+use super::error::{MqttError, CommandError, ConnectError, ConnectErrReturnCode, DisconnectError, DisconnectErrReturnCode, CallbackError};
 use super::iterator::AsyncClientIntoIterator;
 
 
@@ -49,6 +49,9 @@ impl AsyncClient {
     }
     pub fn connect(&mut self, options: &AsyncConnectOptions) -> Result<(), MqttError> {
         self.inner.connect(options)
+    }
+    pub fn disconnect(&mut self, options: &AsyncDisconnectOptions) -> Result<(), MqttError> {
+        self.inner.disconnect(options)
     }
     pub fn is_connected(&self) -> bool {
         self.inner.is_connected()
@@ -149,6 +152,40 @@ impl ImmovableClient {
                 (false, &Some(Err(CallbackError::NullPtr))    ) => Err(MqttError::Connect(ConnectError::CallbackNullPtr)),
             }
         } else { Err(MqttError::Connect(ConnectError::ReturnCode(ConnectErrReturnCode::from_int(error)))) }
+    }
+
+    pub fn disconnect(&mut self, options: &AsyncDisconnectOptions) -> Result<(), MqttError> {
+        debug!("disconnect..");
+        // client must be already conneced to do disconnect
+        if !self.is_connected() {
+            Ok(())
+        }
+        else {
+            let mut async_opts = ffiasync::MQTTAsync_disconnectOptions::new();
+
+            // fill in FFI private struct
+            async_opts.timeout = options.timeout;
+
+            // register callbacks
+            async_opts.context   = self.context();
+            async_opts.onSuccess = Some(Self::action_succeeded);
+            async_opts.onFailure = Some(Self::action_failed);
+
+            self.action_result = None;
+            let error = unsafe {
+                ffiasync::MQTTAsync_disconnect(self.handle, &async_opts)
+            };
+            if error == 0 {
+                self.barrier.wait();
+                match (self.is_connected(), &self.action_result) {
+                    (false, _                                     ) => Ok(()),
+                    (_,     &None                                 ) => unreachable!(),  // barrier should ensure we have something
+                    (_,     &Some(Ok(()))                         ) => unreachable!(),  // callback and is_connected() don't agree?
+                    (_,     &Some(Err(CallbackError::Response(r)))) => Err(MqttError::Disconnect(DisconnectError::CallbackResponse(r))),
+                    (_,     &Some(Err(CallbackError::NullPtr))    ) => Err(MqttError::Disconnect(DisconnectError::CallbackNullPtr)),
+                }
+            } else { Err(MqttError::Disconnect(DisconnectError::ReturnCode(DisconnectErrReturnCode::from_int(error)))) }
+        }
     }
 
     #[allow(unused_variables)]

@@ -27,8 +27,8 @@ mod error;
 mod iterator;
 mod options;
 
-pub use self::options::{PersistenceType, Qos, AsyncConnectOptions};
-pub use self::error::{MqttError, CommandError, ConnectError, ConnectErrReturnCode};
+pub use self::options::{PersistenceType, Qos, AsyncConnectOptions, AsyncDisconnectOptions};
+pub use self::error::{MqttError, CommandError, ConnectError, ConnectErrReturnCode, DisconnectError, DisconnectErrReturnCode};
 pub use self::iterator::AsyncClientIntoIterator;
 pub use self::client::AsyncClient;
 
