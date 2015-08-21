@@ -56,7 +56,7 @@ fn main() {
             }
 
             let disconnect_options = AsyncDisconnectOptions::new();
-            client.disconnect(&disconnect_options);
+            client.disconnect(&disconnect_options).unwrap();
             },
         Err(e) => error!("{}; raw error: {}", e.description(), e)
     }
