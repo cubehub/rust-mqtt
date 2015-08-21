@@ -4,7 +4,7 @@ Currently only async lib is implemented.
 
 ## Dependencies
 
-Build [paho.mqtt.c lib](https://github.com/eclipse/paho.mqtt.c)
+Build [paho.mqtt.c lib](https://github.com/eclipse/paho.mqtt.c) from **develop** branch.
 
     cd ~/Downloads
     git clone https://github.com/eclipse/paho.mqtt.c.git
@@ -69,7 +69,7 @@ Build [rust-bindgen](https://github.com/crabtw/rust-bindgen)
 
 Generate Rust bindings
 
-    ./target/debug/bindgen -l libmqttv3a -match MQTTAsync.h -match MQTTClientPersistence.h -o ~/Development/rust-mqtt/src/ffimqttasync.rs  ~/Downloads/paho.mqtt.c/src/MQTTAsync.h
+    ./target/debug/bindgen -l paho-mqtt3a -match MQTTAsync.h -match MQTTClientPersistence.h -o ~/Development/rust-mqtt/src/ffimqttasync.rs  ~/Downloads/paho.mqtt.c/src/MQTTAsync.h
 
 Notice that there are some issues with rust-bindgen generated code for callbacks. Therefore some manual modifications must be made to ffimqttasync.rs. Here is an example how to do it correctly:
 
