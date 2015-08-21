@@ -48,9 +48,9 @@ Ubuntu
     sudo apt-get install mosquitto mosquitto-clients
     mosquitto
 
-Start rust-mqtt [example](https://github.com/cubehub/rust-mqtt/blob/master/examples/sendreceive.rs):
+Start rust-mqtt [loopback example](https://github.com/cubehub/rust-mqtt/blob/master/examples/loopback.rs):
 
-    cargo run --example sendreceive
+    cargo run --example loopback
 
 
 ## For rust-mqtt developers
