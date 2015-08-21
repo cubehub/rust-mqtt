@@ -6,7 +6,7 @@ extern crate mqtt;
 
 use std::thread;
 use std::char;
-use mqtt::async::{PersistenceType, Qos, MqttError, AsyncClient, AsyncConnectOptions};
+use mqtt::async::{PersistenceType, Qos, MqttError, AsyncClient, AsyncConnectOptions, AsyncDisconnectOptions};
 use std::error::Error;
 
 
@@ -39,7 +39,8 @@ fn main() {
     conf_logger();
 
     // start processing
-    info!("sendreceive test started");
+    info!("loopback test started");
+
     let mut data = Vec::new();
     let topic = "TestTopic";
     match setup_mqtt("tcp://localhost:1883", &topic, "TestClientId") {
@@ -52,8 +53,12 @@ fn main() {
                     info!("{:?}", message);
                 }
                 thread::sleep_ms(200);
-            }},
+            }
+
+            let disconnect_options = AsyncDisconnectOptions::new();
+            client.disconnect(&disconnect_options);
+            },
         Err(e) => error!("{}; raw error: {}", e.description(), e)
     }
-    info!("sendreceive test ended");
+    info!("loopback test ended");
 }
