@@ -262,8 +262,8 @@ pub struct Struct_Unnamed12 {
     pub struct_id: [::libc::c_char; 4usize],
     pub struct_version: ::libc::c_int,
     pub timeout: ::libc::c_int,
-    pub onSuccess: *mut ::std::option::Option<extern "C" fn() -> ()>,
-    pub onFailure: *mut ::std::option::Option<extern "C" fn() -> ()>,
+    pub onSuccess: ::std::option::Option<MQTTAsync_onSuccess>,
+    pub onFailure: ::std::option::Option<MQTTAsync_onFailure>,
     pub context: *mut ::libc::c_void,
 }
 impl ::std::clone::Clone for Struct_Unnamed12 {
