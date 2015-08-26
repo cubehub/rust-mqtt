@@ -74,9 +74,12 @@ impl Iterator for AsyncClientIntoIterator {
         else {
             // blocking
             let mut messages = msglock.lock().unwrap();
-            messages = cvar.wait(messages).unwrap();
-            assert!(messages.len() > 0);
-            Some(messages.remove(0))
+            loop {
+                if messages.len() > 0 {
+                    return Some(messages.remove(0))
+                }
+                messages = cvar.wait(messages).unwrap();
+            }
         }
     }
 }
