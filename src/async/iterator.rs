@@ -22,6 +22,7 @@
  * SOFTWARE.
  */
 
+use time;
 use std::sync::{Arc, Mutex, Condvar};
 use super::Message;
 
@@ -47,20 +48,26 @@ impl Iterator for AsyncClientIntoIterator {
         debug!("next");
         if self.timeout_ms.is_some() {
             // non-blocking
+            let deadline = time::now()+time::Duration::milliseconds(self.timeout_ms.unwrap() as i64);
             let mut messages = msglock.lock().unwrap();
-            if messages.len() > 0 {
-                Some(messages.remove(0))
-            }
-            else {
-                let (mut messages, is_timeout) = cvar.wait_timeout_ms(messages, self.timeout_ms.unwrap()).unwrap();
-                if is_timeout {
+            let mut wait_duration;
+            loop {
+                if messages.len() > 0 {
+                    return Some(messages.remove(0))
+                }
+                wait_duration = (deadline-time::now()).num_milliseconds();
+                if wait_duration <= 0 {
+                    debug!("timeout before condvar wait");
+                    return None
+                }
+                let (msgs, time_left) = cvar.wait_timeout_ms(messages, wait_duration as u32).unwrap();
+                if !time_left {
                     debug!("timeout");
-                    None
+                    return None
                 }
                 else {
                     debug!("no timeout");
-                    assert!(messages.len() > 0);
-                    Some(messages.remove(0))
+                    messages = msgs;
                 }
             }
         }

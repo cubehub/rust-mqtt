@@ -24,7 +24,7 @@
 
 #[macro_use]
 extern crate log;
-
+extern crate time;
 extern crate libc;
 
 #[allow(non_camel_case_types)]
