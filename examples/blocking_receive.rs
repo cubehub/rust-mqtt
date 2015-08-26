@@ -39,20 +39,16 @@ fn main() {
     conf_logger();
 
     // start processing
-    info!("loopback test started");
+    info!("blocking receive test started");
+    info!("run: mosquitto_pub -t TestTopic -m somedata to send some messages to the test");
 
-    let mut data = Vec::new();
     let topic = "TestTopic";
     match setup_mqtt("tcp://localhost:1883", &topic, "TestClientId") {
         Ok(mut client) => {
-            for i in 0..10 {
-                info!("send data len: {}", i);
-                data.push(char::from_digit(i % 10, 10).unwrap() as u8);
-                client.send(&data, &topic, Qos::FireAndForget).unwrap();
-                for message in client.messages(Some(100)) {
-                    info!("{:?}", message);
-                }
-                //thread::sleep_ms(200);
+
+            // thread blocks here until message is received
+            for message in client.messages(None) {
+                info!("{:?}", message);
             }
 
             let disconnect_options = AsyncDisconnectOptions::new();
@@ -60,5 +56,5 @@ fn main() {
             },
         Err(e) => error!("{}; raw error: {}", e.description(), e)
     }
-    info!("loopback test ended");
+    info!("blocking receive test ended");
 }

@@ -22,17 +22,20 @@
  * SOFTWARE.
  */
 
-use std::sync::{Mutex, Arc};
+use std::sync::{Arc, Mutex, Condvar};
 use super::Message;
 
 
 pub struct AsyncClientIntoIterator {
-    messages: Arc<Mutex<Vec<Message>>>,
+    messages   : Arc<(Mutex<Vec<Message>>, Condvar)>,
+    timeout_ms : Option<u32>,
 }
 
 impl AsyncClientIntoIterator {
-    pub fn new(messages: Arc<Mutex<Vec<Message>>>) -> Self {
-        AsyncClientIntoIterator{ messages: messages }
+    pub fn new(messages: Arc<(Mutex<Vec<Message>>, Condvar)>, timeout_ms: Option<u32>) -> Self {
+        AsyncClientIntoIterator{ messages   : messages,
+                                 timeout_ms : timeout_ms
+        }
     }
 }
 
@@ -40,12 +43,33 @@ impl Iterator for AsyncClientIntoIterator {
     type Item = Message;
 
     fn next(&mut self) -> Option<Message> {
-        let mut messages = self.messages.lock().unwrap();
-        if messages.len() > 0 {
-            Some(messages.remove(0))
+        let &(ref msglock, ref cvar) = &*self.messages;
+        debug!("next");
+        if self.timeout_ms.is_some() {
+            // non-blocking
+            let mut messages = msglock.lock().unwrap();
+            if messages.len() > 0 {
+                Some(messages.remove(0))
+            }
+            else {
+                let (mut messages, is_timeout) = cvar.wait_timeout_ms(messages, self.timeout_ms.unwrap()).unwrap();
+                if is_timeout {
+                    debug!("timeout");
+                    None
+                }
+                else {
+                    debug!("no timeout");
+                    assert!(messages.len() > 0);
+                    Some(messages.remove(0))
+                }
+            }
         }
         else {
-            None
+            // blocking
+            let mut messages = msglock.lock().unwrap();
+            messages = cvar.wait(messages).unwrap();
+            assert!(messages.len() > 0);
+            Some(messages.remove(0))
         }
     }
 }
