@@ -45,7 +45,7 @@ impl Iterator for AsyncClientIntoIterator {
 
     fn next(&mut self) -> Option<Message> {
         let &(ref msglock, ref cvar) = &*self.messages;
-        debug!("next");
+
         if self.timeout_ms.is_some() {
             // non-blocking
             let deadline = time::now()+time::Duration::milliseconds(self.timeout_ms.unwrap() as i64);
@@ -57,16 +57,16 @@ impl Iterator for AsyncClientIntoIterator {
                 }
                 wait_duration = (deadline-time::now()).num_milliseconds();
                 if wait_duration <= 0 {
-                    debug!("timeout before condvar wait");
+                    // timeout before condvar wait
                     return None
                 }
+
                 let (msgs, time_left) = cvar.wait_timeout_ms(messages, wait_duration as u32).unwrap();
                 if !time_left {
-                    debug!("timeout");
+                    // timeout - we did not get notification
                     return None
                 }
                 else {
-                    debug!("no timeout");
                     messages = msgs;
                 }
             }

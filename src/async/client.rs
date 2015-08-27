@@ -354,11 +354,9 @@ impl ImmovableClient {
             duplicate : duplicate,
         };
 
-        info!("RX");
         let &(ref msglock, ref cvar) = &*selfclient.messages;
         let mut messages = msglock.lock().unwrap();
         messages.push(msg);
-        info!("RX queue len {:}", messages.len());
         cvar.notify_one();
 
         let mut msg = amessage;
