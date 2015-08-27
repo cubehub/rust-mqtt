@@ -48,7 +48,7 @@ fn main() {
 
             loop {
                 info!("wait for a message..");
-                let timeout_ms = Some(1);
+                let timeout_ms = Some(500);
                 for message in client.messages(timeout_ms) {
                     info!("{:?}", message);
                 }

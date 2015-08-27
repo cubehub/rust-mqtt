@@ -52,7 +52,7 @@ fn main() {
                 for message in client.messages(Some(100)) {
                     info!("{:?}", message);
                 }
-                //thread::sleep_ms(200);
+                thread::sleep_ms(200);
             }
 
             let disconnect_options = AsyncDisconnectOptions::new();
