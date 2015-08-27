@@ -27,7 +27,7 @@ use libc::{c_char, c_int, c_void};
 use std::ffi::{CStr, CString};
 use std::mem;
 use std::slice;
-use std::sync::{Barrier, Mutex, Arc};
+use std::sync::{Barrier, Arc, Mutex, Condvar};
 
 use super::Message;
 use super::options::{PersistenceType, Qos, AsyncConnectOptions, AsyncDisconnectOptions};
@@ -62,8 +62,8 @@ impl AsyncClient {
     pub fn subscribe(&mut self, topic: &str, qos: Qos) -> Result<(), MqttError> {
         self.inner.subscribe(topic, qos)
     }
-    pub fn messages(&mut self) -> AsyncClientIntoIterator {
-        AsyncClientIntoIterator::new(self.inner.messages.clone())
+    pub fn messages(&mut self, timeout_ms: Option<u32>) -> AsyncClientIntoIterator {
+        AsyncClientIntoIterator::new(self.inner.messages.clone(), timeout_ms)
     }
 }
 
@@ -77,7 +77,7 @@ struct ImmovableClient {
 
     barrier       : Barrier,
     action_result : Option<Result<(), CallbackError>>,
-    pub messages  : Arc<Mutex<Vec<Message>>>,
+    pub messages  : Arc<(Mutex<Vec<Message>>, Condvar)>,
 }
 impl ImmovableClient {
     fn context(&mut self) -> *mut c_void {
@@ -94,7 +94,7 @@ impl ImmovableClient {
 
                     barrier         : Barrier::new(2),
                     action_result   : None,
-                    messages        : Arc::new(Mutex::new(Vec::new())),
+                    messages        : Arc::new((Mutex::new(Vec::new()), Condvar::new())),
         }
     }
 
@@ -354,8 +354,10 @@ impl ImmovableClient {
             duplicate : duplicate,
         };
 
-        let mut messages = selfclient.messages.lock().unwrap();
+        let &(ref msglock, ref cvar) = &*selfclient.messages;
+        let mut messages = msglock.lock().unwrap();
         messages.push(msg);
+        cvar.notify_one();
 
         let mut msg = amessage;
         unsafe{ffiasync::MQTTAsync_freeMessage(&mut msg)};
