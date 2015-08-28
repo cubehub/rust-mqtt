@@ -34,15 +34,16 @@ use super::options::{PersistenceType, Qos, AsyncConnectOptions, AsyncDisconnectO
 use super::error::{MqttError, CommandError, ConnectError, ConnectErrReturnCode, DisconnectError, DisconnectErrReturnCode, CallbackError};
 use super::iterator::AsyncClientIntoIterator;
 
+use std::sync::mpsc;
 
 pub struct AsyncClient {
     inner: Box<ImmovableClient>
 }
 
 impl AsyncClient {
-    pub fn new(address: &str, clientid: &str, persistence: PersistenceType) -> Result<Self, MqttError> {
+    pub fn new(address: &str, clientid: &str, persistence: PersistenceType, message_channel: Option<mpsc::Sender<Message>>) -> Result<Self, MqttError> {
         let mut ac = AsyncClient {
-            inner: Box::new(ImmovableClient::new(address, clientid, persistence))
+            inner: Box::new(ImmovableClient::new(address, clientid, persistence, message_channel))
         };
         try!(ac.inner.create());
         Ok(ac)
@@ -78,13 +79,14 @@ struct ImmovableClient {
     barrier       : Barrier,
     action_result : Option<Result<(), CallbackError>>,
     pub messages  : Arc<(Mutex<Vec<Message>>, Condvar)>,
+    channel       : Option<mpsc::Sender<Message>>,
 }
 impl ImmovableClient {
     fn context(&mut self) -> *mut c_void {
         self as *mut _ as *mut c_void
     }
 
-    pub fn new(address: &str, clientid: &str, persistence: PersistenceType) -> Self {
+    pub fn new(address: &str, clientid: &str, persistence: PersistenceType, message_channel: Option<mpsc::Sender<Message>>) -> Self {
         ImmovableClient {
                     c_url               : CString::new(address).unwrap(),
                     c_clientid          : CString::new(clientid).unwrap(),
@@ -95,6 +97,7 @@ impl ImmovableClient {
                     barrier         : Barrier::new(2),
                     action_result   : None,
                     messages        : Arc::new((Mutex::new(Vec::new()), Condvar::new())),
+                    channel         : message_channel
         }
     }
 
@@ -354,10 +357,18 @@ impl ImmovableClient {
             duplicate : duplicate,
         };
 
-        let &(ref msglock, ref cvar) = &*selfclient.messages;
-        let mut messages = msglock.lock().unwrap();
-        messages.push(msg);
-        cvar.notify_one();
+        // send message to channel or to iterator
+        match selfclient.channel {
+            Some(ref channel) => {
+                channel.send(msg);
+            }
+            None => {
+                let &(ref msglock, ref cvar) = &*selfclient.messages;
+                let mut messages = msglock.lock().unwrap();
+                messages.push(msg);
+                cvar.notify_one();
+            }
+        }
 
         let mut msg = amessage;
         unsafe{ffiasync::MQTTAsync_freeMessage(&mut msg)};
