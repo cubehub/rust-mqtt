@@ -28,7 +28,7 @@ fn conf_logger() {
 
 fn setup_mqtt(server_address: &str, topic: &str, client_id: &str) -> Result<AsyncClient, MqttError> {
     let connect_options = AsyncConnectOptions::new();
-    let mut client = try!(AsyncClient::new(server_address, client_id, PersistenceType::Nothing));
+    let mut client = try!(AsyncClient::new(server_address, client_id, PersistenceType::Nothing, None));
     try!(client.connect(&connect_options));
     try!(client.subscribe(topic, Qos::FireAndForget));
     Ok(client)
