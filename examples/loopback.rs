@@ -48,7 +48,7 @@ fn main() {
             for i in 0..10 {
                 info!("send data len: {}", i);
                 data.push(char::from_digit(i % 10, 10).unwrap() as u8);
-                client.send(&data, &topic, Qos::FireAndForget).unwrap();
+                client.send(&data, &topic, Qos::FireAndForget, false).unwrap();
                 for message in client.messages(Some(100)) {
                     info!("{:?}", message);
                 }

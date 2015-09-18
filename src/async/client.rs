@@ -57,8 +57,8 @@ impl AsyncClient {
     pub fn is_connected(&self) -> bool {
         self.inner.is_connected()
     }
-    pub fn send(&mut self, data: &[u8], topic: &str, qos: Qos) -> Result<(), MqttError> {
-        self.inner.send(data, topic, qos)
+    pub fn send(&mut self, data: &[u8], topic: &str, qos: Qos, retained: bool) -> Result<(), MqttError> {
+        self.inner.send(data, topic, qos, retained)
     }
     pub fn subscribe(&mut self, topic: &str, qos: Qos) -> Result<(), MqttError> {
         self.inner.subscribe(topic, qos)
@@ -208,7 +208,7 @@ impl ImmovableClient {
         }
     }
 
-    pub fn send(&mut self, data: &[u8], topic: &str, qos: Qos) -> Result<(), MqttError> {
+    pub fn send(&mut self, data: &[u8], topic: &str, qos: Qos, retained: bool) -> Result<(), MqttError> {
         debug!("send..");
         let mut responseoption = ffiasync::MQTTAsync_responseOptions {
             struct_id       : ['M' as i8, 'Q' as i8, 'T' as i8, 'R' as i8],
@@ -219,13 +219,18 @@ impl ImmovableClient {
             token           : 0,
         };
 
+        let retained = match retained {
+            true => 1,
+            false => 0,
+        };
+
         let mut message = ffiasync::MQTTAsync_message {
             struct_id       : ['M' as i8, 'Q' as i8, 'T' as i8, 'M' as i8],
             struct_version  : 0,
             payloadlen      : data.len() as i32,
             payload         : unsafe {mem::transmute::<&u8, *mut c_void>(&data[0])},
             qos             : qos as c_int,
-            retained        : 0,
+            retained        : retained as c_int,
             dup             : 0,
             msgid           : 0,
         };
@@ -360,7 +365,7 @@ impl ImmovableClient {
         // send message to channel or to iterator
         match selfclient.channel {
             Some(ref channel) => {
-                channel.send(msg);
+                channel.send(msg).unwrap();
             }
             None => {
                 let &(ref msglock, ref cvar) = &*selfclient.messages;
