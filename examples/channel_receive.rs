@@ -4,8 +4,6 @@ extern crate fern;
 extern crate time;
 extern crate mqtt;
 
-use std::thread;
-use std::char;
 use mqtt::async::{PersistenceType, Qos, MqttError, AsyncClient, AsyncConnectOptions, AsyncDisconnectOptions, Message};
 use std::error::Error;
 use std::sync::mpsc;
